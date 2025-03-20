@@ -64,7 +64,8 @@ vector<string> convertToBinary(const unordered_set<int> &termSet, int numVariabl
 }
 
 int main() {
-    ifstream file("D:/AUC/Spring 2025/DD1/Project/input.txt");
+  //  ifstream file("D:/AUC/Spring 2025/DD1/Project/input.txt");
+    ifstream file("test1.txt");  // read from the file that has 5 test cases
     if (!file) {
         cerr << "Error: Unable to open file." << endl;
         return 1;
