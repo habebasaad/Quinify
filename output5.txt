@@ -1,0 +1,4 @@
+B'CE + C'E' + BC' + AD' + A'CD + C'D' + A'E'
+B'CE + C'E' + BC' + AD' + A'CD + C'D' + BE'
+B'CE + C'E' + BC' + AD' + A'CD + B'D' + A'E'
+B'CE + C'E' + BC' + AD' + A'CD + B'D' + BE'
