@@ -94,16 +94,26 @@ void Expression::checkForConflicts(const string &minMaxTerms, const string &dont
 string Expression::determineTermType(const string &terms) {
     stringstream ss(terms);
     string token;
+    bool hasTerms = false;
+    
     while (getline(ss, token, ',')) {
         token.erase(0, token.find_first_not_of(" "));
         if (!token.empty()) {
+            hasTerms = true;
             if (token[0] == 'm') return "minterms";
             if (token[0] == 'M') return "maxterms";
         }
     }
+    
+    // If we have an empty terms list (only don't cares or no inputs at all)
+    if (!hasTerms) {
+        return "minterms"; // Default to minterms when only don't cares are present
+    }
+    
     cerr << "Error: Could not determine term type." << endl;
     exit(1);
 }
+
 
 
 void Expression::convertMaxtermsToMinterms(const vector<Term> &maxterms) {
