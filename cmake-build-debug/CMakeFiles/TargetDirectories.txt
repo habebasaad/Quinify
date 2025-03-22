@@ -1,3 +1,0 @@
-C:/Users/Beba/Documents/GitHub/dd1-s25-project1-quinify/cmake-build-debug/CMakeFiles/dd1_s25_project1_quinify.dir
-C:/Users/Beba/Documents/GitHub/dd1-s25-project1-quinify/cmake-build-debug/CMakeFiles/edit_cache.dir
-C:/Users/Beba/Documents/GitHub/dd1-s25-project1-quinify/cmake-build-debug/CMakeFiles/rebuild_cache.dir
