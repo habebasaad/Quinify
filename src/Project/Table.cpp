@@ -2,6 +2,7 @@
 #include <iostream>
 #include <set>
 #include <algorithm>
+#include <sstream>
 
 using namespace std;
 
@@ -79,5 +80,147 @@ void Table::printPrimeImplicants() {
     cout << "Prime Implicants: " << endl;
     for (const auto &pi : primeImplicants) {
         cout << pi.binary << " -> " << pi.toExpression() << endl;
+        for (auto &m : pi.coveredMinterms) {
+            cout<< "$"<<m <<endl;
     }
+    cout<< "-----------"<<endl;
 }
+}
+
+void Table::EPIgeneration() {
+    // Build the coverage chart
+    for (auto &pi : primeImplicants) {
+        for (auto &m : pi.coveredMinterms) {
+            CoverageChart[m].push_back(pi);
+        }
+    }
+
+    set<int> coveredMinterms;
+
+    // Identify essential prime implicants
+    for (auto &[m, pi_list] : CoverageChart) {
+        // Skip don't care terms when identifying EPIs
+        if (find(terms.begin(), terms.end(), Term(m, terms[0].binary.size())) == terms.end()) {
+            continue;
+        }
+
+        if (pi_list.size() == 1) {
+            Term essentialPI = pi_list[0];
+            
+            // Check if this prime implicant is already in EPI
+            bool already_included = false;
+            for (auto &epi : EPI) {
+                if (epi.binary == essentialPI.binary) {
+                    already_included = true;
+                    break;
+                }
+            }
+            
+            if (!already_included) {
+                EPI.push_back(essentialPI);
+                cout << "Essential Prime Implicant: " << essentialPI.toExpression() << endl;
+                
+                // Mark all minterms covered by this EPI
+                for (auto &covered : essentialPI.coveredMinterms) {
+                    coveredMinterms.insert(covered);
+                }
+            }
+        }
+    }
+
+    // Handle remaining uncovered minterms
+    for (auto &term : terms) {
+        if (coveredMinterms.find(term.value) == coveredMinterms.end()) {
+            // Find a prime implicant that covers this minterm
+            for (auto &pi : primeImplicants) {
+                if (find(pi.coveredMinterms.begin(), pi.coveredMinterms.end(), term.value) != pi.coveredMinterms.end()) {
+                    EPI.push_back(pi);
+                    cout << "Additional Prime Implicant: " << pi.toExpression() << endl;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Generate the final expression
+    cout << "Final Expression: ";
+    for (size_t i = 0; i < EPI.size(); i++) {
+        if (i > 0) cout << " + ";
+        cout << EPI[i].toExpression();
+    }
+    cout << endl;
+}
+
+
+// void Table:: FinalExpression(){
+//     stringstream final;
+    
+//     set <string> possible_F;
+//     for(auto &epi: EPI){
+    
+//         cout<<epi.toExpression();
+
+      // final<<epi.toExpression();
+      
+    //    final<< " + "; 
+   // }
+
+
+//     for(auto &[m, pi] : CoverageChart){
+//        { 
+//         for(auto &pi : primeImplicants)
+//     {
+//         for (auto &min: pi.coveredMinterms)
+//         {
+            
+//         if (min==m)
+//        { 
+//         stringstream temp;
+//         temp.str(final.str());
+//         temp << pi.toExpression();
+        
+//         temp<< " + "; 
+//         possible_F.insert(temp.str()); // vector of all possible minimized funtion expression
+//          }
+           
+//         }
+//     }
+//          }
+
+
+//     }
+//  cout << "Minimized Expressions:" <<endl;
+
+//     for (auto &expr: possible_F)
+//     cout<< expr << endl << endl;
+    
+//}
+
+// void Table::FinalExpression() {
+//     set<string> unique_expressions;
+    
+//     // Construct base expression from Essential Prime Implicants
+//     string final;
+//     for (size_t i = 0; i < EPI.size(); i++) {
+//         if (i > 0) final += " + "; // Append "+" only if it's NOT the first term
+//         final += EPI[i].toExpression();
+//     }
+
+//     // Generate possible minimized function expressions
+//     for (auto &[m, pi_list] : CoverageChart) {
+//         for (auto &pi : pi_list) {  // Only iterate over relevant prime implicants
+//             string temp = final;
+//             if (!pi.toExpression().empty()) { // Ensure expression is not empty
+//                 if (!temp.empty()) temp += " + "; // Append "+" only if necessary
+//                 temp += pi.toExpression();
+//             }
+//             unique_expressions.insert(temp); // Store unique expressions
+//         }
+//     }
+
+//     // Print unique minimized expressions
+//     cout << "Minimized Expressions:\n";
+//     for (const auto &expr : unique_expressions) {
+//         cout << expr << endl;
+//     }
+// }

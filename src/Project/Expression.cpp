@@ -186,3 +186,6 @@ void Expression::printTerms() {
     for (const auto &term : dontCares) cout << term.value << " ";
     cout << endl;
 }
+
+
+

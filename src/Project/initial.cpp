@@ -10,6 +10,7 @@ int main() {
     
     Table table(expr.minterms, expr.dontCares);
     table.printPrimeImplicants();
+    table.EPIgeneration();
     
     return 0;
 }

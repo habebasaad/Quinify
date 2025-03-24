@@ -12,12 +12,12 @@ public:
     string binary;
     bool used;
     vector<int> coveredMinterms;
-    
     Term(int val, int numVariables);
     static int countOnes(const string &binary);
     static bool canCombine(const Term &a, const Term &b);
     static string combineTerms(const Term &a, const Term &b);
     string toExpression() const;
+
 };
 
 #endif
