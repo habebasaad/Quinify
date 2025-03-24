@@ -111,6 +111,13 @@ void Table::EPIgeneration() {
     // extract essential prime implicants
 
         for (auto &[m, pi_list] : CoverageChart) {
+            
+//delete the dontcares
+//             for (auto &dc:dont_cares)
+// {
+// CoverageChart.erase(dc);
+// }
+
                     // Skip don't care terms when identifying EPIs
                     if (find(dont_cares.begin(), dont_cares.end(), m) != dont_cares.end()) {
                         continue;
