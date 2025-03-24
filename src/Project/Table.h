@@ -12,6 +12,7 @@ class Table {
 public:
     vector<Term> terms;
     vector<Term> primeImplicants;
+    vector<int> dont_cares;
     vector <Term> EPI;
     map <int, vector<Term> > CoverageChart;
 

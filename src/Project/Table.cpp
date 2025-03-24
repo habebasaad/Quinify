@@ -6,10 +6,16 @@
 
 using namespace std;
 
-Table::Table(vector<Term> &minterms, vector<Term> &dontCares) {
+Table::Table(vector<Term>& minterms, vector<Term>& dontCares) {
     // Combine minterms and don't-cares
     terms = minterms;
     terms.insert(terms.end(), dontCares.begin(), dontCares.end());
+    
+    // Store don't care values
+    for (const auto& dc : dontCares) {
+        dont_cares.push_back(dc.value);
+    }
+    
     generatePrimeImplicants();
 }
 
@@ -77,6 +83,12 @@ void Table::generatePrimeImplicants() {
 }
 
 void Table::printPrimeImplicants() {
+
+    cout << "dontcares " << endl;
+    for (const auto &dc : dont_cares) {
+        cout << dc<< " **"<<endl;
+    }
+
     cout << "Prime Implicants: " << endl;
     for (const auto &pi : primeImplicants) {
         cout << pi.binary << " -> " << pi.toExpression() << endl;
@@ -88,26 +100,26 @@ void Table::printPrimeImplicants() {
 }
 
 void Table::EPIgeneration() {
-    // Build the coverage chart
+    // coverage chart
+    set<int> coveredMinterms;
     for (auto &pi : primeImplicants) {
         for (auto &m : pi.coveredMinterms) {
             CoverageChart[m].push_back(pi);
         }
     }
 
-    set<int> coveredMinterms;
+    // extract essential prime implicants
 
-    // Identify essential prime implicants
-    for (auto &[m, pi_list] : CoverageChart) {
-        // Skip don't care terms when identifying EPIs
-        if (find(terms.begin(), terms.end(), Term(m, terms[0].binary.size())) == terms.end()) {
-            continue;
-        }
+        for (auto &[m, pi_list] : CoverageChart) {
+                    // Skip don't care terms when identifying EPIs
+                    if (find(dont_cares.begin(), dont_cares.end(), m) != dont_cares.end()) {
+                        continue;
+                    }
 
         if (pi_list.size() == 1) {
             Term essentialPI = pi_list[0];
             
-            // Check if this prime implicant is already in EPI
+                // avoid duplicates
             bool already_included = false;
             for (auto &epi : EPI) {
                 if (epi.binary == essentialPI.binary) {
@@ -120,26 +132,14 @@ void Table::EPIgeneration() {
                 EPI.push_back(essentialPI);
                 cout << "Essential Prime Implicant: " << essentialPI.toExpression() << endl;
                 
+                
                 // Mark all minterms covered by this EPI
                 for (auto &covered : essentialPI.coveredMinterms) {
                     coveredMinterms.insert(covered);
                 }
             }
         }
-    }
-
-    // Handle remaining uncovered minterms
-    for (auto &term : terms) {
-        if (coveredMinterms.find(term.value) == coveredMinterms.end()) {
-            // Find a prime implicant that covers this minterm
-            for (auto &pi : primeImplicants) {
-                if (find(pi.coveredMinterms.begin(), pi.coveredMinterms.end(), term.value) != pi.coveredMinterms.end()) {
-                    EPI.push_back(pi);
-                    cout << "Additional Prime Implicant: " << pi.toExpression() << endl;
-                    break;
-                }
-            }
-        }
+        
     }
 
     // Generate the final expression
@@ -148,8 +148,78 @@ void Table::EPIgeneration() {
         if (i > 0) cout << " + ";
         cout << EPI[i].toExpression();
     }
-    cout << endl;
+    cout << endl<<"<<--------------------";
+
+FinalExpression();
 }
+
+// void Table::FinalExpression() {
+//     set<string> unique_expressions;
+
+//     // Construct base expression from Essential Prime Implicants
+//     string base_expr;
+//     for (size_t i = 0; i < EPI.size(); i++) {
+//         if (i > 0) base_expr += " + ";
+//         base_expr += EPI[i].toExpression();
+//     }
+
+//     // Generate possible minimized function expressions
+//     for (auto &[m, pi_list] : CoverageChart) {
+//         for (auto &pi : pi_list) {
+//             string temp = base_expr;
+//             if (!pi.toExpression().empty()) {
+//                 if (!temp.empty()) temp += " + ";
+//                 temp += pi.toExpression();
+//             }
+//             unique_expressions.insert(temp);
+//         }
+//     }
+
+//     // Print unique minimized expressions
+//     cout << "Minimized Expressions:" << endl;
+//     for (const auto &expr : unique_expressions) {
+//         cout << expr << endl;
+//     }
+// }
+
+void Table::FinalExpression() {
+    set<string> unique_expressions;
+
+    string base_expr;
+    for (size_t i = 0; i < EPI.size(); i++) {
+        if (i > 0) base_expr += " + ";
+        base_expr += EPI[i].toExpression();
+    }
+
+    for (const auto& epi : EPI) {
+        for (const auto& m : epi.coveredMinterms) {
+            CoverageChart.erase(m);
+        }
+    }
+
+    if (CoverageChart.empty()) {
+        unique_expressions.insert(base_expr);
+    } else {
+        for (const auto& [m, pi_list] : CoverageChart) {
+            for (const auto& pi : pi_list) {
+                string temp = base_expr;
+                if (!pi.toExpression().empty()) {
+                    if (!temp.empty()) temp += " + ";
+                    temp += pi.toExpression();
+                }
+                unique_expressions.insert(temp);
+            }
+        }
+    }
+
+    // Print unique minimized expressions
+    cout << "Minimized Expressions:" << endl;
+    for (const auto& expr : unique_expressions) {
+        cout << expr << endl;
+    }
+}
+
+
 
 
 // void Table:: FinalExpression(){
@@ -160,11 +230,10 @@ void Table::EPIgeneration() {
     
 //         cout<<epi.toExpression();
 
-      // final<<epi.toExpression();
+//       final<<epi.toExpression();
       
-    //    final<< " + "; 
-   // }
-
+//        final<< " + "; 
+//    }
 
 //     for(auto &[m, pi] : CoverageChart){
 //        { 
@@ -183,18 +252,18 @@ void Table::EPIgeneration() {
 //         possible_F.insert(temp.str()); // vector of all possible minimized funtion expression
 //          }
            
-//         }
+//          }
 //     }
 //          }
 
 
 //     }
-//  cout << "Minimized Expressions:" <<endl;
+//  cout << "Minimized Expressions:" <<"----------------" <<endl;
 
 //     for (auto &expr: possible_F)
 //     cout<< expr << endl << endl;
     
-//}
+// }
 
 // void Table::FinalExpression() {
 //     set<string> unique_expressions;
