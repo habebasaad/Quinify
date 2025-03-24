@@ -208,6 +208,9 @@ void Table::FinalExpression() {
         unique_expressions.insert(base_expr);
     } else {
         for (const auto& [m, pi_list] : CoverageChart) {
+            if (find(dont_cares.begin(), dont_cares.end(), m) != dont_cares.end()) {
+                continue;
+            }
             for (const auto& pi : pi_list) {
                 string temp = base_expr;
                 if (!pi.toExpression().empty()) {
