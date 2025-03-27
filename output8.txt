@@ -1,0 +1,1 @@
+Error: One term is assigned as don't care and min term at the same time.

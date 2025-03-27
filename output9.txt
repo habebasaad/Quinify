@@ -1,0 +1,1 @@
+Error: Input contains both minterms and maxterms at the same time.
