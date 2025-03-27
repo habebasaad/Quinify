@@ -14,14 +14,25 @@ public:
     vector<Term> primeImplicants;
     vector<int> dont_cares;
     vector <Term> EPI;
+    vector <Term> remainingPI;
     map <int, vector<Term> > CoverageChart;
+    map <int, vector<Term> > reducedChart; //for uncovered minterms
+
 
     Table(vector<Term> &minterms, vector<Term> &dontCares);
     void generatePrimeImplicants();
     void printPrimeImplicants();
     void EPIgeneration();
     void FinalExpression();
-
+    //for dominance
+    void processRemainingPI();
+    bool applyRowDominance();
+    bool applyColumnDominance();
+    void applyDominanceRules();
+    //for Petrick Method
+    vector<vector<int>> expandToPetricksSOP(const vector<vector<int>>& pos);
+    int countLiterals(const Term& term);
+    void PetrickMethod();  //the collection
 };
 
 #endif

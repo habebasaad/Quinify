@@ -57,6 +57,7 @@ void Expression::checkForConflicts(const string &minMaxTerms, const string &dont
     string token;
     set<int> termValues;
     
+    
     while (getline(ss1, token, ',')) {
         token.erase(0, token.find_first_not_of(" "));
         if (token.size() > 1) {
