@@ -109,9 +109,32 @@ void Table::processRemainingPI() {
 
     remainingPI.clear();
     reducedChart.clear();
+    // for (auto &pi : primeImplicants) {
+    //     if (find(EPI.begin(), EPI.end(), pi) == EPI.end()) {
+    //         remainingPI.push_back(pi);
+    //         for (auto &m : pi.coveredMinterms) {
+    //             if (coveredMinterms.find(m) == coveredMinterms.end() && 
+    //                 find(dont_cares.begin(), dont_cares.end(), m) == dont_cares.end())
+    //                 reducedChart[m].push_back(pi);
+    //         }
+    //     }
+    // }
+
+    // Find remaining prime implicants and uncovered minterms
     for (auto &pi : primeImplicants) {
-        if (find(EPI.begin(), EPI.end(), pi) == EPI.end()) {
+        // Skip PIs already in EPI list
+        bool isEPI = false;
+        for (const auto &epi : EPI) {
+            if (pi.binary == epi.binary) {
+                isEPI = true;
+                break;
+            }
+        }
+        if (!isEPI) {
+            // Add to remaining PI list
             remainingPI.push_back(pi);
+            
+            // Update reduced chart with uncovered minterms
             for (auto &m : pi.coveredMinterms) {
                 if (coveredMinterms.find(m) == coveredMinterms.end() && 
                     find(dont_cares.begin(), dont_cares.end(), m) == dont_cares.end())
@@ -133,38 +156,46 @@ void Table::applyDominanceRules() {
 
 bool Table::applyColumnDominance() {
     bool changed = false;
-    for (auto it1 = reducedChart.begin(); it1 != reducedChart.end(); ++it1) {
-        for (auto it2 = reducedChart.begin(); it2 != reducedChart.end();) {
-            if (it1 == it2) { ++it2; continue; }
+    for (auto it1 = reducedChart.begin(); it1 != reducedChart.end();) {
+        bool erased = false;
+        for (auto it2 = reducedChart.begin(); it2 != reducedChart.end();++it2) {
+            if (it1 == it2) { continue; }
             if (includes(it1->second.begin(), it1->second.end(), 
                          it2->second.begin(), it2->second.end())) {
                 it1 = reducedChart.erase(it1);
+                erased = true;
                 changed = true;
-            } else {
-                ++it2;
-            }
-        }
+                break;
+            } }
+            if(!erased) ++it1;
     }
     return changed;
 }
 
 bool Table::applyRowDominance() {
     bool changed = false;
-    for (auto it1 = remainingPI.begin(); it1 != remainingPI.end(); ++it1) {
-        for (auto it2 = remainingPI.begin(); it2 != remainingPI.end();) {
-            if (it1 == it2) { ++it2; continue; }
-            // check if t1 includes t2 (all t2 in t1)
-            if (includes(it1->coveredMinterms.begin(), it1->coveredMinterms.end(),
-                         it2->coveredMinterms.begin(), it2->coveredMinterms.end())) {
-                it2 = remainingPI.erase(it2);
-                changed = true;
-            } else {
-                ++it2;
+        for (auto it1 = remainingPI.begin(); it1 != remainingPI.end();) {
+            bool erased = false;
+            for (auto it2 = remainingPI.begin(); it2 != remainingPI.end();) {
+                if (it1 == it2) { ++it2; continue; }
+                
+                // check if t1 includes t2 (all t2 in t1)
+                if (includes(it1->coveredMinterms.begin(), it1->coveredMinterms.end(),
+                             it2->coveredMinterms.begin(), it2->coveredMinterms.end())) {
+                    it2 = remainingPI.erase(it2);
+                    changed = true;
+                    erased = true;  // Restart the process after making changes
+                } else {
+                    ++it2;
+                }
             }
-        }
+            if(erased) it1 = remainingPI.begin();
+            else ++it1;
     }
+    
     return changed;
 }
+
 
 void Table::EPIgeneration() {
     // coverage chart
@@ -208,38 +239,46 @@ void Table::EPIgeneration() {
         }
    }
    
-   // PetrickMethod();
-  // dominanceRule();
   processRemainingPI();
   applyDominanceRules();
 
-  // Select remaining PIs
-  set<int> uncoveredMinterms;
-  for (auto &[m, _] : reducedChart) {
-      uncoveredMinterms.insert(m);
-  }
-
-  while (!uncoveredMinterms.empty()) {
-      Term* bestPI = nullptr;
+ // Check if all minterms are covered
+ set<int> uncoveredMinterms;
+ for (auto &[m, _] : reducedChart) {
+     if (find(dont_cares.begin(), dont_cares.end(), m) == dont_cares.end()) {
+         uncoveredMinterms.insert(m);
+     }
+ }
+ 
+ // If there are still uncovered minterms after dominance rules
+ if (!uncoveredMinterms.empty()) {
+    Term* bestPI = nullptr;
       int maxCoverage = 0;
-      for (auto &pi : remainingPI) {
-          int coverage = count_if(pi.coveredMinterms.begin(), pi.coveredMinterms.end(),
+      auto bestIt = remainingPI.end();
+
+      for (auto pi = remainingPI.begin(); pi!= remainingPI.end(); ++pi) {
+          int coverage = count_if(pi->coveredMinterms.begin(), pi->coveredMinterms.end(),
               [&](int m) { return uncoveredMinterms.find(m) != uncoveredMinterms.end(); });
           if (coverage > maxCoverage) {
               maxCoverage = coverage;
-              bestPI = &pi;
+              bestPI =& (*pi);
+              bestIt = pi;
           }
       }
-      if (bestPI) {
+      if (bestPI && maxCoverage>0) {
           EPI.push_back(*bestPI);
-          cout<<"new EPI from the dominance: "<< bestPI->toExpression() <<endl;
+          cout<<"PI from the dominance: "<< bestPI->toExpression() <<endl;
           for (auto &m : bestPI->coveredMinterms) {
               uncoveredMinterms.erase(m);
           }
-      } else {
-          break;
+          if(bestIt!= remainingPI.end()) remainingPI.erase(bestIt);
+      } //else break;
+     
+     // If there are still uncovered minterms, use Petrick's method
+    } if (!uncoveredMinterms.empty()) {
+         // Apply Petrick's method for the remaining uncovered minterms
+         PetrickMethod();
       }
-  }
 
     // Generate the final expression
     cout << "Final Expression: ";
@@ -261,7 +300,6 @@ void Table::FinalExpression() {
         if (i > 0) base_expr += " + ";
         base_expr += EPI[i].toExpression();
     }
-   // processRemainingPI();
     // Generate possible minimized function expressions
     for (auto &[m, pi_list] : reducedChart) {
         for (auto &pi : pi_list) {
@@ -273,71 +311,80 @@ void Table::FinalExpression() {
             unique_expressions.insert(temp);
         }
     }
-    for (auto & pi: remainingPI){
-        string temp = base_expr;
-            if (!pi.toExpression().empty()) {
-                if (!temp.empty()) temp += " + ";
-                temp += pi.toExpression();
-            }
-        unique.insert(temp);
+    // Print unique minimized expressions    -->has repititions  
+    cout << "Minimized Expressions:" << endl;
+    for(auto & pi: selections){
+        cout<<base_expr << " + " << pi.toExpression() <<endl;
+
     }
-// Print unique minimized expressions
-cout << "*** Minimized Expressions ***:" << endl;
-for (const auto &expr : unique) {
-    cout << expr << endl;
-}
-    // // Print unique minimized expressions    -->has repititions  
-    // cout << "Minimized Expressions:" << endl;
-    // for (const auto &expr : unique_expressions) {
-    //     cout << expr << endl;
-    // }
+    
     
 }
 
-// void Table::FinalExpression() {
-//     set<string> unique_expressions;
-
-//     string base_expr;
-//     for (size_t i = 0; i < EPI.size(); i++) {
-//         if (i > 0) base_expr += " + ";
-//         base_expr += EPI[i].toExpression();
-//     }
-
-//     for (const auto& epi : EPI) {
-//         for (const auto& m : epi.coveredMinterms) {
-//             CoverageChart.erase(m);
-//         }
+void Table::applyPetrickMethod(const map<int, vector<Term>>& uncoveredChart) {
+    if (uncoveredChart.empty()) return;
+    
+    cout << "Applying Petrick's method for remaining minterms..." << endl;
+    
+    // Map each prime implicant to a unique index
+    map<string, int> piToIndex;
+    vector<Term> uniquePIs;
+    
+    for (const auto& [minterm, pi_list] : uncoveredChart) {
+        for (const auto& pi : pi_list) {
+            if (piToIndex.find(pi.binary) == piToIndex.end()) {
+                piToIndex[pi.binary] = uniquePIs.size();
+                uniquePIs.push_back(pi);
+            }
+        }
+    }
+    
+    // Form Product of Sums expression
+    vector<vector<int>> petricksExpression;
+    
+    for (const auto& [minterm, pi_list] : uncoveredChart) {
+        vector<int> sum;
+        for (const auto& pi : pi_list) {
+            sum.push_back(piToIndex[pi.binary]);
+        }
+        petricksExpression.push_back(sum);
+    }
+    
+    // Expand to Sum of Products
+    vector<vector<int>> sop = expandToPetricksSOP(petricksExpression);
+    
+    // Find minimum-cost solution
+    vector<int> bestSolution;
+    int minTerms = INT_MAX;
+    
+    for (const auto& product : sop) {
+        if (product.size() < minTerms) {
+            minTerms = product.size();
+            bestSolution = product;
+        }
+    }
+    
+    // Add selected PIs to solution
+    for (int piIdx : bestSolution) {
+        Term selectedPI = uniquePIs[piIdx];
         
-//     }
+        // Check if already included
+        bool alreadyIncluded = false;
+        for (const auto& epi : EPI) {
+            if (epi.binary == selectedPI.binary) {
+                alreadyIncluded = true;
+                break;
+            }
+        }
+        if (!alreadyIncluded) {
+            EPI.push_back(selectedPI);
+            cout << "Prime Implicant selected by Petrick: " << selectedPI.toExpression() << endl;
+            selections.push_back(selectedPI);
+            }
+    }
+}
 
-//     if (CoverageChart.empty()) {
-//         unique_expressions.insert(base_expr);
-//     } else {
-//         for (const auto& [m, pi_list] : CoverageChart) {
-//             if (find(dont_cares.begin(), dont_cares.end(), m) != dont_cares.end()) {
-//                 continue;
-//             }
-//             for (const auto& pi : pi_list) {
-//                 string temp = base_expr;
-//                 if (!pi.toExpression().empty()) {
-//                     if (!temp.empty()) temp += " + ";
-//                     temp += pi.toExpression();
-//                 }
-//                 unique_expressions.insert(temp);
-//             }
-//         }
-//     }
-
-//     // Print unique minimized expressions
-//     cout << "Minimized Expressions:" << endl;
-//     for (const auto& expr : unique_expressions) {
-//         cout << expr << endl;
-//     }
-// }
-
-
-
-
+////////////////////******************************************************************9999 */
 
 void Table::PetrickMethod() {
     // Step 1: Find uncovered minterms after EPIs
@@ -437,7 +484,8 @@ void Table::PetrickMethod() {
         }
         
         if (!alreadyIncluded) {
-            EPI.push_back(selectedPI);
+          //  EPI.push_back(selectedPI);
+            selections.push_back(selectedPI);
             cout << "Prime Implicant selected by Petrick: " << selectedPI.toExpression() << endl;
         }
     }

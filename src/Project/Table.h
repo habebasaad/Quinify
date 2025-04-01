@@ -17,6 +17,7 @@ public:
     vector <Term> remainingPI;
     map <int, vector<Term> > CoverageChart;
     map <int, vector<Term> > reducedChart; //for uncovered minterms
+    vector<Term> selections;
 
 
     Table(vector<Term> &minterms, vector<Term> &dontCares);
@@ -30,6 +31,7 @@ public:
     bool applyColumnDominance();
     void applyDominanceRules();
     //for Petrick Method
+    void applyPetrickMethod(const map<int, vector<Term>>& uncoveredChart);
     vector<vector<int>> expandToPetricksSOP(const vector<vector<int>>& pos);
     int countLiterals(const Term& term);
     void PetrickMethod();  //the collection
