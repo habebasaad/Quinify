@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <map>
+#include<set>
 
 using namespace std;
 
@@ -18,8 +19,10 @@ public:
     map <int, vector<Term> > CoverageChart;
     map <int, vector<Term> > reducedChart; //for uncovered minterms
     vector<Term> selections;
+    set<int> C_m; //coveredminterms
+    map<string, set<int>> piToMinterms;
 
-
+    set<int> uncoveredMinterms;
     Table(vector<Term> &minterms, vector<Term> &dontCares);
     void generatePrimeImplicants();
     void printPrimeImplicants();

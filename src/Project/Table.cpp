@@ -1,4 +1,5 @@
 #include "Table.h"
+#include "Term.h"
 #include <iostream>
 #include <set>
 #include <algorithm>
@@ -99,30 +100,15 @@ void Table::printPrimeImplicants() {
 }
 }
 void Table::processRemainingPI() {
-    set<int> coveredMinterms;
-    for (auto &epi : EPI) {
-        for (auto &m : epi.coveredMinterms) {
-            if (find(dont_cares.begin(), dont_cares.end(), m) == dont_cares.end())
-                coveredMinterms.insert(m);
-        }
-    }
-
+    // Clear existing collections
     remainingPI.clear();
     reducedChart.clear();
-    // for (auto &pi : primeImplicants) {
-    //     if (find(EPI.begin(), EPI.end(), pi) == EPI.end()) {
-    //         remainingPI.push_back(pi);
-    //         for (auto &m : pi.coveredMinterms) {
-    //             if (coveredMinterms.find(m) == coveredMinterms.end() && 
-    //                 find(dont_cares.begin(), dont_cares.end(), m) == dont_cares.end())
-    //                 reducedChart[m].push_back(pi);
-    //         }
-    //     }
-    // }
-
-    // Find remaining prime implicants and uncovered minterms
+    
+    // Create a map to track which minterms each PI covers (after reduction)
+    
+    // Process each prime implicant
     for (auto &pi : primeImplicants) {
-        // Skip PIs already in EPI list
+        // Check if this PI is already an EPI
         bool isEPI = false;
         for (const auto &epi : EPI) {
             if (pi.binary == epi.binary) {
@@ -130,67 +116,305 @@ void Table::processRemainingPI() {
                 break;
             }
         }
+        
+        // If not an EPI, add to remaining PIs and update reduced chart
         if (!isEPI) {
             // Add to remaining PI list
             remainingPI.push_back(pi);
+            cout << "remaining pi: " << pi.toExpression() << endl;
+            
+            // Track uncovered minterms for this PI
+            set<int> uncoveredMinterms;
             
             // Update reduced chart with uncovered minterms
             for (auto &m : pi.coveredMinterms) {
-                if (coveredMinterms.find(m) == coveredMinterms.end() && 
-                    find(dont_cares.begin(), dont_cares.end(), m) == dont_cares.end())
+                if (C_m.find(m) == C_m.end() && 
+                    find(dont_cares.begin(), dont_cares.end(), m) == dont_cares.end()) {
                     reducedChart[m].push_back(pi);
+                    uncoveredMinterms.insert(m);
+                }
+            }
+            
+            // Map this PI to its uncovered minterms
+            if (!uncoveredMinterms.empty()) {
+                piToMinterms[pi.binary] = uncoveredMinterms;
+                
+                // Print the mapping for debugging
+                cout << "  Covers uncovered minterms: ";
+                for (auto m : uncoveredMinterms) {
+                    cout << m << " ";
+                }
+                cout << endl;
             }
         }
     }
+    
+    // Print the reduced coverage chart for debugging
+    cout << "\nReduced Coverage Chart:" << endl;
+    for (auto &[minterm, pis] : reducedChart) {
+        cout << "Minterm " << minterm << " covered by: ";
+        for (auto &pi : pis) {
+            cout << pi.toExpression() << " ";
+        }
+        cout << endl;
+    }
+    
+    // // Check for row dominance opportunities based on the mapping
+    // cout << "\nPotential Row Dominance:" << endl;
+    // for (auto it1 = piToMinterms.begin(); it1 != piToMinterms.end(); ++it1) {
+    //     for (auto it2 = piToMinterms.begin(); it2 != piToMinterms.end(); ++it2) {
+    //         if (it1 != it2) {
+    //             if (includes(it1->second.begin(), it1->second.end(), 
+    //                          it2->second.begin(), it2->second.end())) {
+    //                 // Find the corresponding Term objects
+    //                 Term* pi1 = nullptr;
+    //                 Term* pi2 = nullptr;
+    //                 for (auto &pi : remainingPI) {
+    //                     if (pi.binary == it1->first) pi1 = &pi;
+    //                     if (pi.binary == it2->first) pi2 = &pi;
+    //                 }
+                    
+    //                 if (pi1 && pi2) {
+    //                     cout << "PI " << pi1->toExpression() << " dominates " 
+    //                          << pi2->toExpression() << endl;
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 }
 
+
 void Table::applyDominanceRules() {
+    std::cout << "\n=== Applying Dominance Rules ===" << std::endl;
+    
     bool changed;
+    int iteration = 0;
     do {
+        std::cout << "\nIteration " << ++iteration << std::endl;
         changed = false;
-        // bitwise or operator to track the changes.
-        changed |= applyColumnDominance();
-        changed |= applyRowDominance();
+        
+        // Apply column dominance first, then row dominance
+      
+
+        bool colChanged = applyColumnDominance();
+        bool rowChanged = applyRowDominance();
+        
+        changed = colChanged || rowChanged;
+        
+        // If any changes were made, update the coverage chart
+        if (changed) {
+            std::cout << "\nUpdating reduced chart after dominance rules..." << std::endl;
+            
+            // Update the reduced chart based on the remaining PIs
+            for (auto& entry : reducedChart) {
+                // Filter out any PIs that have been removed
+                auto& piList = entry.second;
+                int beforeSize = piList.size();
+                piList.erase(
+                    std::remove_if(piList.begin(), piList.end(), 
+                        [this](const Term& pi) {
+                            return std::find(remainingPI.begin(), remainingPI.end(), pi) == remainingPI.end();
+                        }),
+                    piList.end()
+                );
+                int afterSize = piList.size();
+                
+                if (beforeSize != afterSize) {
+                    std::cout << "Updated minterm " << entry.first << ": removed " 
+                              << (beforeSize - afterSize) << " PIs" << std::endl;
+                }
+            }
+        }
     } while (changed);
+    
+    std::cout << "\n Dominance Rules Application Complete" << std::endl;
+    std::cout << "Final remaining pis" << std::endl;
+    for (const auto& entry : reducedChart) {
+        std::cout << "Minterm " << entry.first << " covered by PIs: ";
+        for (const auto& pi : entry.second) {
+            std::cout << pi.toExpression() << " ";
+        }
+        std::cout << std::endl;
+    }
 }
+
 
 bool Table::applyColumnDominance() {
     bool changed = false;
-    for (auto it1 = reducedChart.begin(); it1 != reducedChart.end();) {
-        bool erased = false;
-        for (auto it2 = reducedChart.begin(); it2 != reducedChart.end();++it2) {
-            if (it1 == it2) { continue; }
-            if (includes(it1->second.begin(), it1->second.end(), 
-                         it2->second.begin(), it2->second.end())) {
-                it1 = reducedChart.erase(it1);
-                erased = true;
+    
+    std::cout << "\n--- Column Dominance Debug ---" << std::endl;
+    
+    // Create a copy of the keys to avoid iterator invalidation
+    std::vector<int> minterms;
+    for (const auto& entry : reducedChart) {
+        minterms.push_back(entry.first);
+        std::cout << "Minterm " << entry.first << " covered by PIs: ";
+        for (const auto& pi : entry.second) {
+            std::cout << pi.toExpression() << " ";
+        }
+        std::cout << std::endl;
+    }
+    
+    // Check each pair of minterms for dominance
+    for (size_t i = 0; i < minterms.size(); ++i) {
+        // Skip if this minterm has been removed
+        if (reducedChart.find(minterms[i]) == reducedChart.end()) {
+            continue;
+        }
+        
+        for (size_t j = 0; j < minterms.size(); ++j) {
+            // Skip self-comparison or if second minterm has been removed
+            if (i == j || reducedChart.find(minterms[j]) == reducedChart.end()) {
+                continue;
+            }
+            
+            // Check if minterm[i]'s PIs include all of minterm[j]'s PIs
+            const auto& piList1 = reducedChart[minterms[i]];
+            const auto& piList2 = reducedChart[minterms[j]];
+            
+            if (includes(piList1.begin(), piList1.end(),
+                         piList2.begin(), piList2.end())) {
+                std::cout << "Column dominance: Minterm " << minterms[i] 
+                          << " dominates minterm " << minterms[j] << std::endl;
+                std::cout << "Removing minterm " << minterms[i] << std::endl;
+                reducedChart.erase(minterms[i]);
                 changed = true;
                 break;
-            } }
-            if(!erased) ++it1;
+            }
+        }
     }
+    
+    if (!changed) {
+        std::cout << "No column dominance found" << std::endl;
+    }
+    
     return changed;
 }
 
+// bool Table::applyRowDominance() {
+//     bool changed = false;
+    
+//     std::cout << "\n--- Row Dominance Debug ---" << std::endl;
+    
+//     // First, populate the piToMinterms map with uncovered minterms for each PI
+//     piToMinterms.clear();
+//     for (const auto& pi : remainingPI) {
+//         set<int> uncoveredMinterms;
+//         for (const auto& m : pi.coveredMinterms) {
+//             // Only consider minterms that are in the reduced chart (uncovered by EPIs)
+//             if (C_m.find(m) == C_m.end() && 
+//                 find(dont_cares.begin(), dont_cares.end(), m) == dont_cares.end()) {
+//                 uncoveredMinterms.insert(m);
+//             }
+//         }
+//         piToMinterms[pi.binary] = uncoveredMinterms;
+//     }
+    
+//     // Print all remaining PIs before applying dominance
+//     std::cout << "Remaining PIs before dominance check:" << std::endl;
+//     for (const auto& pi : remainingPI) {
+//         std::cout << "PI: " << pi.toExpression() << " covers uncovered minterms: ";
+//         for (const auto& m : piToMinterms[pi.binary]) {
+//             std::cout << m << " ";
+//         }
+//         std::cout << std::endl;
+//     }
+    
+//     for (auto it1 = remainingPI.begin(); it1 != remainingPI.end();) {
+//         bool erased = false;
+//         for (auto it2 = remainingPI.begin(); it2 != remainingPI.end();) {
+//             if (it1 == it2) { ++it2; continue; }
+            
+//             // Check if pi1 dominates pi2 based on uncovered minterms
+//             const auto& minterms1 = piToMinterms[it1->binary];
+//             const auto& minterms2 = piToMinterms[it2->binary];
+            
+//             // If minterms2 is empty, it doesn't cover any uncovered minterms
+//             if (minterms2.empty()) {
+//                 ++it2;
+//                 continue;
+//             }
+            
+//             // If minterms1 includes all of minterms2, then pi1 dominates pi2
+//             if (includes(minterms1.begin(), minterms1.end(), minterms2.begin(), minterms2.end())) {
+//                 cout << "Row dominance: PI " << it1->toExpression() 
+//                      << " dominates PI " << it2->toExpression() << endl;
+//                 cout << "Removing PI: " << it2->toExpression() << endl;
+//                 it2 = remainingPI.erase(it2);
+                        
+//                 changed = true;
+//                 erased = true;  // Restart the process after making changes
+//             } else {
+//                 ++it2;
+//             }
+//         }
+//         if(erased) it1 = remainingPI.begin();
+//         else ++it1;
+//     }
+    
+//     if (!changed) {
+//         std::cout << "No row dominance found" << std::endl;
+//     } else {
+//         // Print remaining PIs after applying dominance
+//         std::cout << "Remaining PIs after dominance check:" << std::endl;
+//         for (const auto& pi : remainingPI) {
+//             std::cout << "PI: " << pi.toExpression() << " covers uncovered minterms: ";
+//             for (const auto& m : piToMinterms[pi.binary]) {
+//                 std::cout << m << " ";
+//             }
+//             std::cout << std::endl;
+//         }
+//     }
+    
+//     return changed;
+// }
 bool Table::applyRowDominance() {
     bool changed = false;
-        for (auto it1 = remainingPI.begin(); it1 != remainingPI.end();) {
-            bool erased = false;
-            for (auto it2 = remainingPI.begin(); it2 != remainingPI.end();) {
-                if (it1 == it2) { ++it2; continue; }
-                
-                // check if t1 includes t2 (all t2 in t1)
-                if (includes(it1->coveredMinterms.begin(), it1->coveredMinterms.end(),
-                             it2->coveredMinterms.begin(), it2->coveredMinterms.end())) {
-                    it2 = remainingPI.erase(it2);
-                    changed = true;
-                    erased = true;  // Restart the process after making changes
-                } else {
-                    ++it2;
+    
+    // First, identify minterms that are covered by only one or two PIs
+    map<int, vector<Term*>> criticalMinterms;
+    for (const auto& [minterm, pis] : reducedChart) {
+        if (pis.size() <= 2) {
+            for (const auto& pi : pis) {
+                criticalMinterms[minterm].push_back(const_cast<Term*>(&pi));
+            }
+        }
+    }
+
+    for (auto it1 = remainingPI.begin(); it1 != remainingPI.end();) {
+        bool erased = false;
+        for (auto it2 = remainingPI.begin(); it2 != remainingPI.end();) {
+            if (it1 == it2) { ++it2; continue; }
+            
+            // Check if pi1 dominates pi2 based on uncovered minterms
+            const auto& minterms1 = piToMinterms[it1->binary];
+            const auto& minterms2 = piToMinterms[it2->binary];
+            
+            bool canRemove = true;
+            // Check if removing either PI would leave any minterm uncovered
+            for (const auto& [minterm, pis] : criticalMinterms) {
+                if ((find(pis.begin(), pis.end(), &(*it1)) != pis.end() ||
+                     find(pis.begin(), pis.end(), &(*it2)) != pis.end()) &&
+                    pis.size() <= 2) {
+                    canRemove = false;
+                    break;
                 }
             }
-            if(erased) it1 = remainingPI.begin();
-            else ++it1;
+            
+            if (canRemove && includes(minterms1.begin(), minterms1.end(), minterms2.begin(), minterms2.end())) {
+                cout << "Row dominance: PI " << it1->toExpression() 
+                     << " dominates PI " << it2->toExpression() << endl;
+                cout << "Removing PI: " << it2->toExpression() << endl;
+                it2 = remainingPI.erase(it2);
+                changed = true;
+                erased = true;
+            } else {
+                ++it2;
+            }
+        }
+        if (erased) it1 = remainingPI.begin();
+        else ++it1;
     }
     
     return changed;
@@ -199,7 +423,7 @@ bool Table::applyRowDominance() {
 
 void Table::EPIgeneration() {
     // coverage chart
-    set<int> coveredMinterms;
+  
     for (auto &pi : primeImplicants) {
         for (auto &m : pi.coveredMinterms) {
             if (find(dont_cares.begin(), dont_cares.end(), m) == dont_cares.end())
@@ -210,6 +434,7 @@ void Table::EPIgeneration() {
 
         // Skip don't care terms when identifying EPIs
         if (find(dont_cares.begin(), dont_cares.end(), m) != dont_cares.end()) {
+            cout<< "dontcare skipped : "<< m << endl;
         continue;
         }
 
@@ -232,7 +457,7 @@ void Table::EPIgeneration() {
                 
                 // Mark all minterms covered by this EPI
                 for (auto &covered : essentialPI.coveredMinterms) {
-                    coveredMinterms.insert(covered);
+                    C_m.insert(covered);
                 }
                
             }
@@ -243,7 +468,7 @@ void Table::EPIgeneration() {
   applyDominanceRules();
 
  // Check if all minterms are covered
- set<int> uncoveredMinterms;
+
  for (auto &[m, _] : reducedChart) {
      if (find(dont_cares.begin(), dont_cares.end(), m) == dont_cares.end()) {
          uncoveredMinterms.insert(m);
@@ -267,7 +492,7 @@ void Table::EPIgeneration() {
       }
       if (bestPI && maxCoverage>0) {
           EPI.push_back(*bestPI);
-          cout<<"PI from the dominance: "<< bestPI->toExpression() <<endl;
+          cout<<"Bestfit "<< bestPI->toExpression() <<endl;
           for (auto &m : bestPI->coveredMinterms) {
               uncoveredMinterms.erase(m);
           }
@@ -386,121 +611,121 @@ void Table::applyPetrickMethod(const map<int, vector<Term>>& uncoveredChart) {
 
 ////////////////////******************************************************************9999 */
 
-void Table::PetrickMethod() {
-    // Step 1: Find uncovered minterms after EPIs
-    map<int, vector<Term>> uncoveredChart;
+// void Table::PetrickMethod() {
+//     // Step 1: Find uncovered minterms after EPIs
+//     map<int, vector<Term>> uncoveredChart;
     
-    for (const auto& [minterm, pi_list] : CoverageChart) {
-        // Skip don't cares
-        if (find(dont_cares.begin(), dont_cares.end(), minterm) != dont_cares.end()) {
-            continue;
-        }
+//     for (const auto& [minterm, pi_list] : CoverageChart) {
+//         // Skip don't cares
+//         if (find(dont_cares.begin(), dont_cares.end(), minterm) != dont_cares.end()) {
+//             continue;
+//         }
         
-        // Check if already covered by EPIs
-        bool covered = false;
-        for (const auto& epi : EPI) {
-            for (const auto& m : epi.coveredMinterms) {
-                if (m == minterm) {
-                    covered = true;
-                    break;
-                }
-            }
-            if (covered) break;
-        }
+//         // Check if already covered by EPIs
+//         bool covered = false;
+//         for (const auto& epi : EPI) {
+//             for (const auto& m : epi.coveredMinterms) {
+//                 if (m == minterm) {
+//                     covered = true;
+//                     break;
+//                 }
+//             }
+//             if (covered) break;
+//         }
         
-        if (!covered) {
-            uncoveredChart[minterm] = pi_list;
-        }
-    }
+//         if (!covered) {
+//             uncoveredChart[minterm] = pi_list;
+//         }
+//     }
     
-    if (uncoveredChart.empty()) {
-        cout << "All minterms are covered by Essential Prime Implicants." << endl;
-        return;
-    }
+//     if (uncoveredChart.empty()) {
+//         cout << "All minterms are covered by Essential Prime Implicants." << endl;
+//         return;
+//     }
     
-    cout << "Applying Petrick's method for remaining minterms..." << endl;
+//     cout << "Applying Petrick's method for remaining minterms..." << endl;
     
-    // Step 2: Assign indices to unique prime implicants
-    map<string, int> piToIndex;
-    vector<Term> uniquePIs;
+//     // Step 2: Assign indices to unique prime implicants
+//     map<string, int> piToIndex;
+//     vector<Term> uniquePIs;
     
-    for (const auto& [minterm, pi_list] : uncoveredChart) {
-        for (const auto& pi : pi_list) {
-            if (piToIndex.find(pi.binary) == piToIndex.end()) {
-                piToIndex[pi.binary] = uniquePIs.size();
-                uniquePIs.push_back(pi);
-            }
-        }
-    }
+//     for (const auto& [minterm, pi_list] : uncoveredChart) {
+//         for (const auto& pi : pi_list) {
+//             if (piToIndex.find(pi.binary) == piToIndex.end()) {
+//                 piToIndex[pi.binary] = uniquePIs.size();
+//                 uniquePIs.push_back(pi);
+//             }
+//         }
+//     }
     
-    // Step 3: Form Product of Sums expression
-    vector<vector<int>> petricksExpression;
+//     // Step 3: Form Product of Sums expression
+//     vector<vector<int>> petricksExpression;
     
-    for (const auto& [minterm, pi_list] : uncoveredChart) {
-        vector<int> sum;
-        for (const auto& pi : pi_list) {
-            sum.push_back(piToIndex[pi.binary]);
-        }
-        petricksExpression.push_back(sum);
-    }
+//     for (const auto& [minterm, pi_list] : uncoveredChart) {
+//         vector<int> sum;
+//         for (const auto& pi : pi_list) {
+//             sum.push_back(piToIndex[pi.binary]);
+//         }
+//         petricksExpression.push_back(sum);
+//     }
     
-    // Step 4: Expand to Sum of Products
-    vector<vector<int>> sop = expandToPetricksSOP(petricksExpression);
+//     // Step 4: Expand to Sum of Products
+//     vector<vector<int>> sop = expandToPetricksSOP(petricksExpression);
     
-    // Step 5: Find minimum-cost solution
-    vector<int> bestSolution;
-    int minTerms = INT_MAX;
+//     // Step 5: Find minimum-cost solution
+//     vector<int> bestSolution;
+//     int minTerms = INT_MAX;
     
-    for (const auto& product : sop) {
-        if (product.size() < minTerms) {
-            minTerms = product.size();
-            bestSolution = product;
-        } else if (product.size() == minTerms) {
-            // If tied for number of terms, choose the one with fewer literals
-            int cost1 = 0, cost2 = 0;
-            for (int i : bestSolution) {
-                cost1 += countLiterals(uniquePIs[i]);
-            }
-            for (int i : product) {
-                cost2 += countLiterals(uniquePIs[i]);
-            }
-            if (cost2 < cost1) {
-                bestSolution = product;
-            }
-        }
-    }
+//     for (const auto& product : sop) {
+//         if (product.size() < minTerms) {
+//             minTerms = product.size();
+//             bestSolution = product;
+//         } else if (product.size() == minTerms) {
+//             // If tied for number of terms, choose the one with fewer literals
+//             int cost1 = 0, cost2 = 0;
+//             for (int i : bestSolution) {
+//                 cost1 += countLiterals(uniquePIs[i]);
+//             }
+//             for (int i : product) {
+//                 cost2 += countLiterals(uniquePIs[i]);
+//             }
+//             if (cost2 < cost1) {
+//                 bestSolution = product;
+//             }
+//         }
+//     }
     
-    // Step 6: Add selected PIs to solution
-    for (int piIdx : bestSolution) {
-        Term selectedPI = uniquePIs[piIdx];
+//     // Step 6: Add selected PIs to solution
+//     for (int piIdx : bestSolution) {
+//         Term selectedPI = uniquePIs[piIdx];
         
-        // Check if already included
-        bool alreadyIncluded = false;
-        for (const auto& epi : EPI) {
-            if (epi.binary == selectedPI.binary) {
-                alreadyIncluded = true;
-                break;
-            }
-        }
+//         // Check if already included
+//         bool alreadyIncluded = false;
+//         for (const auto& epi : EPI) {
+//             if (epi.binary == selectedPI.binary) {
+//                 alreadyIncluded = true;
+//                 break;
+//             }
+//         }
         
-        if (!alreadyIncluded) {
-          //  EPI.push_back(selectedPI);
-            selections.push_back(selectedPI);
-            cout << "Prime Implicant selected by Petrick: " << selectedPI.toExpression() << endl;
-        }
-    }
-}
+//         if (!alreadyIncluded) {
+//           //  EPI.push_back(selectedPI);
+//             selections.push_back(selectedPI);
+//             cout << "Prime Implicant selected by Petrick: " << selectedPI.toExpression() << endl;
+//         }
+//     }
+// }
 
-// Count literals in a term (for cost calculation)
-int Table::countLiterals(const Term& term) {
-    int count = 0;
-    for (char c : term.binary) {
-        if (c != '-') count++;
-    }
-    return count;
-}
+// // Count literals in a term (for cost calculation)
+// int Table::countLiterals(const Term& term) {
+//     int count = 0;
+//     for (char c : term.binary) {
+//         if (c != '-') count++;
+//     }
+//     return count;
+// }
 
-// Expand Petrick's expression to SOP form
+// // Expand Petrick's expression to SOP form
 vector<vector<int>> Table::expandToPetricksSOP(const vector<vector<int>>& pos) {
     if (pos.empty()) return {{}};
     
@@ -513,20 +738,16 @@ vector<vector<int>> Table::expandToPetricksSOP(const vector<vector<int>>& pos) {
     // Process remaining clauses
     for (size_t i = 1; i < pos.size(); i++) {
         vector<vector<int>> newResult;
-        
         for (const auto& existingProduct : result) {
             for (int term : pos[i]) {
                 vector<int> newProduct = existingProduct;
-                
                 // Add term if not already present
                 if (find(newProduct.begin(), newProduct.end(), term) == newProduct.end()) {
                     newProduct.push_back(term);
                 }
-                
                 newResult.push_back(newProduct);
             }
         }
-        
         result = newResult;
     }
     
@@ -539,23 +760,19 @@ vector<vector<int>> Table::expandToPetricksSOP(const vector<vector<int>>& pos) {
     sort(result.begin(), result.end());
     result.erase(unique(result.begin(), result.end()), result.end());
     
-    // Apply absorption law (if A⊆B, then A+B=A)
+    // Apply absorption law properly
     vector<vector<int>> minimalResult;
-    for (const auto& product1 : result) {
-        bool isMinimal = true;
-        
-        for (const auto& product2 : result) {
-            if (product1 == product2) continue;
-            
-            // If product2 is a subset of product1, product1 is redundant
-            if (includes(product1.begin(), product1.end(), product2.begin(), product2.end())) {
-                isMinimal = false;
+    for (size_t i = 0; i < result.size(); i++) {
+        bool isRedundant = false;
+        for (size_t j = 0; j < result.size(); j++) {
+            if (i != j && includes(result[i].begin(), result[i].end(), 
+                                  result[j].begin(), result[j].end())) {
+                isRedundant = true;
                 break;
             }
         }
-        
-        if (isMinimal) {
-            minimalResult.push_back(product1);
+        if (!isRedundant) {
+            minimalResult.push_back(result[i]);
         }
     }
     
@@ -563,6 +780,57 @@ vector<vector<int>> Table::expandToPetricksSOP(const vector<vector<int>>& pos) {
 }
 
 
+void Table::PetrickMethod() {
+    // Find uncovered minterms after EPIs
+    map<int, vector<Term>> uncoveredChart;
+    for (const auto& [minterm, pi_list] : CoverageChart) {
+        // Skip don't cares and already covered minterms
+        if (find(dont_cares.begin(), dont_cares.end(), minterm) != dont_cares.end() || 
+            C_m.find(minterm) != C_m.end()) {
+            continue;
+        }
+        
+        uncoveredChart[minterm] = pi_list;
+    }
+    
+    // Form Product of Sums expression
+    vector<vector<int>> petricksExpression;
+    map<string, int> piToIndex;
+    vector<Term> uniquePIs;
+    
+    // Map PIs to indices
+    for (const auto& [minterm, pi_list] : uncoveredChart) {
+        vector<int> sum;
+        for (const auto& pi : pi_list) {
+            if (piToIndex.find(pi.binary) == piToIndex.end()) {
+                piToIndex[pi.binary] = uniquePIs.size();
+                uniquePIs.push_back(pi);
+            }
+            sum.push_back(piToIndex[pi.binary]);
+        }
+        petricksExpression.push_back(sum);
+    }
+    
+    // Expand to Sum of Products
+    vector<vector<int>> sop = expandToPetricksSOP(petricksExpression);
+    
+    // Find minimum-cost solution
+    vector<int> bestSolution;
+    int minTerms = INT_MAX;
+    
+    for (const auto& product : sop) {
+        if (product.size() < minTerms) {
+            minTerms = product.size();
+            bestSolution = product;
+        }
+    }
+    
+    // Add selected PIs to solution
+    for (int piIdx : bestSolution) {
+        Term selectedPI = uniquePIs[piIdx];
+        EPI.push_back(selectedPI);
+    }
+}
 
 
 

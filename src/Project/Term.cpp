@@ -40,10 +40,11 @@ string Term::toExpression() const {
             expr += var;
             expr += "'";
         }
-        // Skip if binary[i] is '-'
-        
-        var++;
+        // Don't add anything to the expression if binary[i] is '-'
+        var++;  // Always increment the variable name
     }
     
     return expr;
 }
+
+    
