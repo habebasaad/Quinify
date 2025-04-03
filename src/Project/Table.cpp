@@ -369,54 +369,72 @@ bool Table::applyColumnDominance() {
     
 //     return changed;
 // }
-bool Table::applyRowDominance() {
+
+     bool Table::applyRowDominance() {
     bool changed = false;
-    
-    // First, identify minterms that are covered by only one or two PIs
-    map<int, vector<Term*>> criticalMinterms;
-    for (const auto& [minterm, pis] : reducedChart) {
-        if (pis.size() <= 2) {
-            for (const auto& pi : pis) {
-                criticalMinterms[minterm].push_back(const_cast<Term*>(&pi));
+    std::cout << "\n--- Row Dominance Debug ---" << std::endl;
+
+    // Create a map of PIs to their covered minterms
+    map<string, set<int>> piToMinterms;
+    for (const auto& pi : remainingPI) {
+        set<int> coveredMinterms;
+        for (const auto& m : pi.coveredMinterms) {
+            if (C_m.find(m) == C_m.end() && 
+                find(dont_cares.begin(), dont_cares.end(), m) == dont_cares.end()) {
+                coveredMinterms.insert(m);
             }
+        }
+        piToMinterms[pi.binary] = coveredMinterms;
+    }
+
+    // Print all remaining PIs before applying dominance
+    std::cout << "Remaining PIs before dominance check:" << std::endl;
+    for (const auto& [binary, minterms] : piToMinterms) {
+        std::cout << "PI: " << binary << " covers minterms: ";
+        for (const auto& m : minterms) {
+            std::cout << m << " ";
+        }
+        std::cout << std::endl;
+    }
+
+    // Check for row dominance
+    for (auto it1 = remainingPI.begin(); it1 != remainingPI.end();) {
+        bool dominated = false;
+        for (auto it2 = remainingPI.begin(); it2 != remainingPI.end(); ++it2) {
+            if (it1 == it2) continue;
+
+            const auto& minterms1 = piToMinterms[it1->binary];
+            const auto& minterms2 = piToMinterms[it2->binary];
+
+            // Check if it2 dominates it1
+            if (includes(minterms2.begin(), minterms2.end(), minterms1.begin(), minterms1.end()) &&
+                minterms1 != minterms2) {
+                cout << "Row dominance: PI " << it2->toExpression() 
+                     << " dominates PI " << it1->toExpression() << endl;
+                cout << "Removing PI: " << it1->toExpression() << endl;
+                it1 = remainingPI.erase(it1);
+                changed = true;
+                dominated = true;
+                break;
+            }
+        }
+        if (!dominated) ++it1;
+    }
+
+    if (!changed) {
+        std::cout << "No row dominance found" << std::endl;
+    } else {
+        // Print remaining PIs after applying dominance
+        std::cout << "Remaining PIs after dominance check:" << std::endl;
+        for (const auto& pi : remainingPI) {
+            std::cout << "PI: " << pi.toExpression() << " covers minterms: ";
+            for (const auto& m : piToMinterms[pi.binary]) {
+                std::cout << m << " ";
+            }
+            std::cout << std::endl;
         }
     }
 
-    for (auto it1 = remainingPI.begin(); it1 != remainingPI.end();) {
-        bool erased = false;
-        for (auto it2 = remainingPI.begin(); it2 != remainingPI.end();) {
-            if (it1 == it2) { ++it2; continue; }
-            
-            // Check if pi1 dominates pi2 based on uncovered minterms
-            const auto& minterms1 = piToMinterms[it1->binary];
-            const auto& minterms2 = piToMinterms[it2->binary];
-            
-            bool canRemove = true;
-            // Check if removing either PI would leave any minterm uncovered
-            for (const auto& [minterm, pis] : criticalMinterms) {
-                if ((find(pis.begin(), pis.end(), &(*it1)) != pis.end() ||
-                     find(pis.begin(), pis.end(), &(*it2)) != pis.end()) &&
-                    pis.size() <= 2) {
-                    canRemove = false;
-                    break;
-                }
-            }
-            
-            if (canRemove && includes(minterms1.begin(), minterms1.end(), minterms2.begin(), minterms2.end())) {
-                cout << "Row dominance: PI " << it1->toExpression() 
-                     << " dominates PI " << it2->toExpression() << endl;
-                cout << "Removing PI: " << it2->toExpression() << endl;
-                it2 = remainingPI.erase(it2);
-                changed = true;
-                erased = true;
-            } else {
-                ++it2;
-            }
-        }
-        if (erased) it1 = remainingPI.begin();
-        else ++it1;
-    }
-    
     return changed;
 }
 
