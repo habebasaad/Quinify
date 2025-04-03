@@ -105,7 +105,7 @@ void Table::processRemainingPI() {
     reducedChart.clear();
     
     // Create a map to track which minterms each PI covers (after reduction)
-    
+
     // Process each prime implicant
     for (auto &pi : primeImplicants) {
         // Check if this PI is already an EPI
@@ -495,7 +495,7 @@ void Table::EPIgeneration() {
  
  // If there are still uncovered minterms after dominance rules
  if (!uncoveredMinterms.empty()) {
-    Term* bestPI = nullptr;
+    vector<Term> bestPI;
       int maxCoverage = 0;
       auto bestIt = remainingPI.end();
 
@@ -504,17 +504,21 @@ void Table::EPIgeneration() {
               [&](int m) { return uncoveredMinterms.find(m) != uncoveredMinterms.end(); });
           if (coverage > maxCoverage) {
               maxCoverage = coverage;
-              bestPI =& (*pi);
+              bestPI .push_back(*pi);
               bestIt = pi;
           }
       }
-      if (bestPI && maxCoverage>0) {
-          EPI.push_back(*bestPI);
-          cout<<"Bestfit "<< bestPI->toExpression() <<endl;
-          for (auto &m : bestPI->coveredMinterms) {
+      int index = 0;
+      while (!bestPI.empty() && maxCoverage>0 && index<bestPI.size()) {
+          EPI.push_back(bestPI[index]);
+          cout<<"Bestfit "<< bestPI[index].toExpression() <<endl;
+          for (auto &m : bestPI[index].coveredMinterms) {
               uncoveredMinterms.erase(m);
+              maxCoverage--;
+              
           }
           if(bestIt!= remainingPI.end()) remainingPI.erase(bestIt);
+          index++;
       } //else break;
      
      // If there are still uncovered minterms, use Petrick's method
