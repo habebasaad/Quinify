@@ -36,9 +36,9 @@ public:
     void applyDominanceRules();
     void BestfitPI();
     //for Petrick Method
-    // void PetrickMethod();
-    // vector<vector<int>> MultiplyOutPOS(const vector<vector<int>>& POS);
-    // void ApplyAbsorptionLaw(vector<vector<int>>& SOP);
+    void PetrickMethod();
+    vector<vector<int>> expandToPetricksSOP(const vector<vector<int>>& pos);
+    int countLiterals(const Term& term);
 };
 
 #endif

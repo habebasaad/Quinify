@@ -497,10 +497,10 @@ void Table::EPIgeneration() {
    for(auto & rem: remainingPI){
     cout<<rem.toExpression()<<endl;
    }
-    //  if (!reducedChart.empty()) {
-    //      // Apply Petrick's method for the remaining uncovered minterms
-    //      PetrickMethod();
-    //   }
+     if (!reducedChart.empty()) {
+         // Apply Petrick's method for the remaining uncovered minterms
+         PetrickMethod();
+      }
 
     // Generate the final expression
     cout << "Final Expression: ";
@@ -600,6 +600,237 @@ void Table::FinalExpression() {
     
     
 }
+
+void Table::PetrickMethod() {
+    // Step 1: Find uncovered minterms after EPIs
+    map<int, vector<Term>> uncoveredChart;
+    
+    for (const auto& [minterm, pi_list] : reducedChart) {
+            uncoveredChart[minterm] = pi_list;
+    }
+    
+    if (uncoveredChart.empty()) {
+        cout << "All minterms are covered by Essential Prime Implicants." << endl;
+        return;
+    }
+    
+    cout << "Applying Petrick's method for remaining minterms..." << endl;
+    // Step 2: Assign indices to unique prime implicants
+    map<string, int> piToIndex;
+    vector<Term> uniquePIs;
+    
+    for (const auto& [minterm, pi_list] : uncoveredChart) {
+        for (const auto& pi : pi_list) {
+            if (piToIndex.find(pi.binary) == piToIndex.end()) {
+                piToIndex[pi.binary] = uniquePIs.size();
+                uniquePIs.push_back(pi);
+            }
+        }
+    }
+    
+    // Step 3: Form Product of Sums expression
+    vector<vector<int>> petricksExpression;
+    
+    for (const auto& [minterm, pi_list] : uncoveredChart) {
+        vector<int> sum;
+        for (const auto& pi : pi_list) {
+            sum.push_back(piToIndex[pi.binary]);
+        }
+        petricksExpression.push_back(sum);
+    }
+    
+    // Step 4: Expand to Sum of Products
+    vector<vector<int>> sop = expandToPetricksSOP(petricksExpression);
+    
+    // Step 5: Find minimum-cost solution
+    vector<int> bestSolution;
+    int minTerms = INT_MAX;
+    
+    for (const auto& product : sop) {
+        if (product.size() < minTerms) {
+            minTerms = product.size();
+            bestSolution = product;
+        } else if (product.size() == minTerms) {
+            // If tied for number of terms, choose the one with fewer literals
+            int cost1 = 0, cost2 = 0;
+            for (int i : bestSolution) {
+                cost1 += countLiterals(uniquePIs[i]);
+            }
+            for (int i : product) {
+                cost2 += countLiterals(uniquePIs[i]);
+            }
+            if (cost2 < cost1) {
+                bestSolution = product;
+            }
+        }
+    }
+    
+    // Step 6: Add selected PIs to solution
+    for (int piIdx : bestSolution) {
+        Term selectedPI = uniquePIs[piIdx];
+        
+        // Check if already included
+        bool alreadyIncluded = false;
+        for (const auto& epi : EPI) {
+            if (epi.binary == selectedPI.binary) {
+                alreadyIncluded = true;
+                break;
+            }
+        }
+        
+        if (!alreadyIncluded) {
+          //  EPI.push_back(selectedPI);
+            selections.push_back(selectedPI);
+            cout << "Prime Implicant selected by Petrick: " << selectedPI.toExpression() << endl;
+        }
+    }
+}
+
+
+// void Table:: PetrickMethod(){
+//         // Map each prime implicant to a unique index
+//         map<string, int> piToIndex;
+//         vector<Term> uniquePIs;
+        
+//         for (const auto& [minterm, pi_list] : reducedChart) {
+//             for (const auto& pi : pi_list) {
+//                 if (piToIndex.find(pi.binary) == piToIndex.end()) {
+//                     piToIndex[pi.binary] = uniquePIs.size();
+//                     uniquePIs.push_back(pi);
+//                 }
+//             }
+//         }
+        
+//         // Form Product of Sums expression
+//         vector<vector<int>> petricksExpression;
+        
+//         for (const auto& [minterm, pi_list] : reducedChart) {
+//             vector<int> sum;
+//             for (const auto& pi : pi_list) {
+//                 sum.push_back(piToIndex[pi.binary]);
+//             }
+//             petricksExpression.push_back(sum);
+//         }
+        
+//         // Expand to Sum of Products
+//         vector<vector<int>> sop = expandToPetricksSOP(petricksExpression);
+        
+//         // Find minimum-cost solution
+//         vector<int> bestSolution;
+//         int minTerms = INT_MAX;
+        
+//         for (const auto& product : sop) {
+//             if (product.size() < minTerms) {
+//                 minTerms = product.size();
+//                 bestSolution = product;
+//             } else if (product.size() == minTerms) {
+//                 // If tied for number of terms, choose the one with fewer literals
+//                 int cost1 = 0, cost2 = 0;
+                
+//                 for (int i : bestSolution) {
+//                     cost1 += countLiterals(uniquePIs[i]);
+//                 }
+                
+//                 for (int i : product) {
+//                     cost2 += countLiterals(uniquePIs[i]);
+//                 }
+                
+//                 if (cost2 < cost1) {
+//                     bestSolution = product;
+//                 }
+//             }
+//         }
+        
+//         // Add selected PIs to solution
+//         for (int piIdx : bestSolution) {
+//             Term selectedPI = uniquePIs[piIdx];
+            
+//             // Check if already included
+//             bool alreadyIncluded = false;
+//             for (const auto& epi : EPI) {
+//                 if (epi.binary == selectedPI.binary) {
+//                     alreadyIncluded = true;
+//                     break;
+//                 }
+//             }
+            
+//             if (!alreadyIncluded) {
+//                 selections.push_back(selectedPI);
+//                 cout << "Prime Implicant selected by Petrick: " << selectedPI.toExpression() << endl;
+                
+//                 // Update covered minterms
+//                 for (auto &covered : selectedPI.coveredMinterms) {
+//                     C_m.insert(covered);
+//                 }
+//             }
+//         }
+// }
+
+// Count literals in a term (for cost calculation)
+int Table::countLiterals(const Term& term) {
+    int count = 0;
+    for (char c : term.binary) {
+        if (c != '-') count++;
+    }
+    return count;
+}
+
+
+// // Expand Petrick's expression to SOP form
+vector<vector<int>> Table::expandToPetricksSOP(const vector<vector<int>>& pos) {
+    if (pos.empty()) return {{}};
+    
+    // Initialize with first clause
+    vector<vector<int>> result;
+    for (int term : pos[0]) {
+        result.push_back({term});
+    }
+    
+    // Process remaining clauses
+    for (size_t i = 1; i < pos.size(); i++) {
+        vector<vector<int>> newResult;
+        for (const auto& existingProduct : result) {
+            for (int term : pos[i]) {
+                vector<int> newProduct = existingProduct;
+                // Add term if not already present
+                if (find(newProduct.begin(), newProduct.end(), term) == newProduct.end()) {
+                    newProduct.push_back(term);
+                }
+                newResult.push_back(newProduct);
+            }
+        }
+        result = newResult;
+    }
+    
+    // Sort each product for consistent comparison
+    for (auto& product : result) {
+        sort(product.begin(), product.end());
+    }
+    
+    // Remove duplicates
+    sort(result.begin(), result.end());
+    result.erase(unique(result.begin(), result.end()), result.end());
+    
+    // Apply absorption law properly
+    vector<vector<int>> minimalResult;
+    for (size_t i = 0; i < result.size(); i++) {
+        bool isRedundant = false;
+        for (size_t j = 0; j < result.size(); j++) {
+            if (i != j && includes(result[i].begin(), result[i].end(), 
+                                  result[j].begin(), result[j].end())) {
+                isRedundant = true;
+                break;
+            }
+        }
+        if (!isRedundant) {
+            minimalResult.push_back(result[i]);
+        }
+    }
+    
+    return minimalResult;
+}
+
+
 
 
 // void Table::PetrickMethod() {
