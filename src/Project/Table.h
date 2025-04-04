@@ -10,6 +10,7 @@
 using namespace std;
 
 class Table {
+
 public:
     vector<Term> terms;
     vector<Term> primeImplicants;
@@ -33,11 +34,11 @@ public:
     bool applyRowDominance();
     bool applyColumnDominance();
     void applyDominanceRules();
+    void BestfitPI();
     //for Petrick Method
-    void applyPetrickMethod(const map<int, vector<Term>>& uncoveredChart);
-    vector<vector<int>> expandToPetricksSOP(const vector<vector<int>>& pos);
-    int countLiterals(const Term& term);
-    void PetrickMethod();  //the collection
+    // void PetrickMethod();
+    // vector<vector<int>> MultiplyOutPOS(const vector<vector<int>>& POS);
+    // void ApplyAbsorptionLaw(vector<vector<int>>& SOP);
 };
 
 #endif

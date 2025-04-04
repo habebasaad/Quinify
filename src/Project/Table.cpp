@@ -492,40 +492,15 @@ void Table::EPIgeneration() {
          uncoveredMinterms.insert(m);
      }
  }
- 
- // If there are still uncovered minterms after dominance rules
- if (!uncoveredMinterms.empty()) {
-    vector<Term> bestPI;
-      int maxCoverage = 0;
-      auto bestIt = remainingPI.end();
-
-      for (auto pi = remainingPI.begin(); pi!= remainingPI.end(); ++pi) {
-          int coverage = count_if(pi->coveredMinterms.begin(), pi->coveredMinterms.end(),
-              [&](int m) { return uncoveredMinterms.find(m) != uncoveredMinterms.end(); });
-          if (coverage > maxCoverage) {
-              maxCoverage = coverage;
-              bestPI .push_back(*pi);
-              bestIt = pi;
-          }
-      }
-      int index = 0;
-      while (!bestPI.empty() && maxCoverage>0 && index<bestPI.size()) {
-          EPI.push_back(bestPI[index]);
-          cout<<"Bestfit "<< bestPI[index].toExpression() <<endl;
-          for (auto &m : bestPI[index].coveredMinterms) {
-              uncoveredMinterms.erase(m);
-              maxCoverage--;
-              
-          }
-          if(bestIt!= remainingPI.end()) remainingPI.erase(bestIt);
-          index++;
-      } //else break;
-     
-     // If there are still uncovered minterms, use Petrick's method
-    } if (!uncoveredMinterms.empty()) {
-         // Apply Petrick's method for the remaining uncovered minterms
-         PetrickMethod();
-      }
+   BestfitPI();
+   cout<<"^^^^^^^^^^^\n";
+   for(auto & rem: remainingPI){
+    cout<<rem.toExpression()<<endl;
+   }
+    //  if (!reducedChart.empty()) {
+    //      // Apply Petrick's method for the remaining uncovered minterms
+    //      PetrickMethod();
+    //   }
 
     // Generate the final expression
     cout << "Final Expression: ";
@@ -537,6 +512,64 @@ void Table::EPIgeneration() {
 
 FinalExpression();
  }
+// After identifying EPIs, process remaining uncovered minterms
+void Table::BestfitPI() {
+    map<int, Term*> exclusiveCoverage;
+    
+    // First pass: identify minterms covered by only one PI
+    for (auto &[minterm, pi_list] : reducedChart) {
+        // Skip don't care terms
+        if (find(dont_cares.begin(), dont_cares.end(), minterm) != dont_cares.end()) {
+            continue;
+        }
+        
+        // If this minterm is covered by exactly one PI
+        if (pi_list.size() == 1) {
+            exclusiveCoverage[minterm] = &pi_list[0];
+           // cout<<"Bestfit: "<<exclusiveCoverage[minterm]->toExpression()<<endl;
+        }
+    }
+    
+   // Second pass: collect unique PIs that have exclusive coverage
+    for (auto &[minterm, pi_ptr] : exclusiveCoverage) {
+        // Check if this PI is already included
+        bool already_included = false;
+        for (const auto &epi : EPI) {
+            if (epi.binary == pi_ptr->binary) {
+                already_included = true;
+                break;
+            }
+        }
+        
+        if (!already_included) {
+            EPI.push_back(*pi_ptr);
+            cout << "Exclusive Prime Implicant: " << pi_ptr->toExpression() 
+                 << " (exclusively covers minterm " << minterm << ")" << endl;
+            
+            // Mark all minterms covered by this PI
+            for (auto &covered : pi_ptr->coveredMinterms)
+                C_m.insert(covered);
+        }
+        // Remove this PI from remainingPI
+        auto it = find_if(remainingPI.begin(), remainingPI.end(), 
+        [&](const Term& t) { return t.binary == pi_ptr->binary; });
+    if (it != remainingPI.end()) {
+      //  cout << "Removing " << it->toExpression() << " from remaining PIs" << endl;
+        remainingPI.erase(it);
+    }
+    
+    // Update reducedChart by removing covered minterms
+    for (auto &covered : pi_ptr->coveredMinterms) {
+        // Skip don't care terms
+        if (find(dont_cares.begin(), dont_cares.end(), covered) != dont_cares.end()) {
+            continue;
+        }
+        // Remove the minterm from the reduced chart
+        reducedChart.erase(covered);
+       // cout << "Removed minterm " << covered << " from reduced chart" << endl;
+    }
+    }
+}
 
 void Table::FinalExpression() {
     set<string> unique_expressions;
@@ -568,362 +601,162 @@ void Table::FinalExpression() {
     
 }
 
-void Table::applyPetrickMethod(const map<int, vector<Term>>& uncoveredChart) {
-    if (uncoveredChart.empty()) return;
-    
-    cout << "Applying Petrick's method for remaining minterms..." << endl;
-    
-    // Map each prime implicant to a unique index
-    map<string, int> piToIndex;
-    vector<Term> uniquePIs;
-    
-    for (const auto& [minterm, pi_list] : uncoveredChart) {
-        for (const auto& pi : pi_list) {
-            if (piToIndex.find(pi.binary) == piToIndex.end()) {
-                piToIndex[pi.binary] = uniquePIs.size();
-                uniquePIs.push_back(pi);
-            }
-        }
-    }
-    
-    // Form Product of Sums expression
-    vector<vector<int>> petricksExpression;
-    
-    for (const auto& [minterm, pi_list] : uncoveredChart) {
-        vector<int> sum;
-        for (const auto& pi : pi_list) {
-            sum.push_back(piToIndex[pi.binary]);
-        }
-        petricksExpression.push_back(sum);
-    }
-    
-    // Expand to Sum of Products
-    vector<vector<int>> sop = expandToPetricksSOP(petricksExpression);
-    
-    // Find minimum-cost solution
-    vector<int> bestSolution;
-    int minTerms = INT_MAX;
-    
-    for (const auto& product : sop) {
-        if (product.size() < minTerms) {
-            minTerms = product.size();
-            bestSolution = product;
-        }
-    }
-    
-    // Add selected PIs to solution
-    for (int piIdx : bestSolution) {
-        Term selectedPI = uniquePIs[piIdx];
-        
-        // Check if already included
-        bool alreadyIncluded = false;
-        for (const auto& epi : EPI) {
-            if (epi.binary == selectedPI.binary) {
-                alreadyIncluded = true;
-                break;
-            }
-        }
-        if (!alreadyIncluded) {
-            EPI.push_back(selectedPI);
-            cout << "Prime Implicant selected by Petrick: " << selectedPI.toExpression() << endl;
-            selections.push_back(selectedPI);
-            }
-    }
-}
-
-////////////////////******************************************************************9999 */
 
 // void Table::PetrickMethod() {
-//     // Step 1: Find uncovered minterms after EPIs
-//     map<int, vector<Term>> uncoveredChart;
+//     cout << "Applying Petrick's Method for remaining uncovered minterms..." << endl;
     
-//     for (const auto& [minterm, pi_list] : CoverageChart) {
-//         // Skip don't cares
-//         if (find(dont_cares.begin(), dont_cares.end(), minterm) != dont_cares.end()) {
-//             continue;
+//     // Step 1: Create Product of Sums (POS) expression
+//     // Each sum term represents the PIs that cover a specific minterm
+//     vector<vector<int>> POS; // Product of Sums expression
+//     map<int, Term> piIndex; // Maps PI index to actual Term object
+    
+//     // Assign indices to remaining PIs
+//     int index = 0;
+//     for (const auto& pi : remainingPI) {
+//         piIndex[index] = pi;
+//         index++;
+//     }
+    
+//     // For each uncovered minterm, create a sum term
+//     for (auto& [minterm, pi_list] : reducedChart) {
+        
+//         // Create a sum term for this minterm
+//         vector<int> sumTerm;
+//         for (int i = 0; i < remainingPI.size(); i++) {
+//             // Check if this PI covers the minterm
+//             auto& pi = remainingPI[i];
+//             if (find(pi.coveredMinterms.begin(), pi.coveredMinterms.end(), minterm) != pi.coveredMinterms.end()) {
+//                 sumTerm.push_back(i);
+//             }
 //         }
         
-//         // Check if already covered by EPIs
-//         bool covered = false;
-//         for (const auto& epi : EPI) {
-//             for (const auto& m : epi.coveredMinterms) {
-//                 if (m == minterm) {
-//                     covered = true;
-//                     break;
-//                 }
-//             }
-//             if (covered) break;
+//         if (!sumTerm.empty()) {
+//             POS.push_back(sumTerm);
+//         }
+//     }
+    
+//     // Step 2: Multiply out the POS to get SOP (Sum of Products)
+//     vector<vector<int>> SOP = MultiplyOutPOS(POS);
+    
+//     // Step 3: Find the product term with minimum cost
+//     vector<int> bestProduct;
+//     int minCost = INT_MAX;
+//     int minLiterals = INT_MAX;
+    
+//     for (const auto& product : SOP) {
+//         // Calculate cost (number of PIs) and literals
+//         int cost = product.size();
+//         int literals = 0;
+        
+//         for (int piIdx : product) {
+//             literals += piIndex[piIdx].countLiterals();
 //         }
         
-//         if (!covered) {
-//             uncoveredChart[minterm] = pi_list;
+//         // Update if this product has lower cost or same cost but fewer literals
+//         if (cost < minCost || (cost == minCost && literals < minLiterals)) {
+//             minCost = cost;
+//             minLiterals = literals;
+//             bestProduct = product;
 //         }
 //     }
     
-//     if (uncoveredChart.empty()) {
-//         cout << "All minterms are covered by Essential Prime Implicants." << endl;
-//         return;
-//     }
-    
-//     cout << "Applying Petrick's method for remaining minterms..." << endl;
-    
-//     // Step 2: Assign indices to unique prime implicants
-//     map<string, int> piToIndex;
-//     vector<Term> uniquePIs;
-    
-//     for (const auto& [minterm, pi_list] : uncoveredChart) {
-//         for (const auto& pi : pi_list) {
-//             if (piToIndex.find(pi.binary) == piToIndex.end()) {
-//                 piToIndex[pi.binary] = uniquePIs.size();
-//                 uniquePIs.push_back(pi);
-//             }
-//         }
-//     }
-    
-//     // Step 3: Form Product of Sums expression
-//     vector<vector<int>> petricksExpression;
-    
-//     for (const auto& [minterm, pi_list] : uncoveredChart) {
-//         vector<int> sum;
-//         for (const auto& pi : pi_list) {
-//             sum.push_back(piToIndex[pi.binary]);
-//         }
-//         petricksExpression.push_back(sum);
-//     }
-    
-//     // Step 4: Expand to Sum of Products
-//     vector<vector<int>> sop = expandToPetricksSOP(petricksExpression);
-    
-//     // Step 5: Find minimum-cost solution
-//     vector<int> bestSolution;
-//     int minTerms = INT_MAX;
-    
-//     for (const auto& product : sop) {
-//         if (product.size() < minTerms) {
-//             minTerms = product.size();
-//             bestSolution = product;
-//         } else if (product.size() == minTerms) {
-//             // If tied for number of terms, choose the one with fewer literals
-//             int cost1 = 0, cost2 = 0;
-//             for (int i : bestSolution) {
-//                 cost1 += countLiterals(uniquePIs[i]);
-//             }
-//             for (int i : product) {
-//                 cost2 += countLiterals(uniquePIs[i]);
-//             }
-//             if (cost2 < cost1) {
-//                 bestSolution = product;
-//             }
-//         }
-//     }
-    
-//     // Step 6: Add selected PIs to solution
-//     for (int piIdx : bestSolution) {
-//         Term selectedPI = uniquePIs[piIdx];
+//     // Step 4: Add the selected PIs to the final solution
+//     cout << "Selected PIs from Petrick's method: " << endl;
+//     for (int piIdx : bestProduct) {
+//         Term selectedPI = piIndex[piIdx];
         
 //         // Check if already included
-//         bool alreadyIncluded = false;
+//         bool already_included = false;
 //         for (const auto& epi : EPI) {
 //             if (epi.binary == selectedPI.binary) {
-//                 alreadyIncluded = true;
+//                 already_included = true;
 //                 break;
 //             }
 //         }
         
-//         if (!alreadyIncluded) {
+//         if (!already_included) {
 //           //  EPI.push_back(selectedPI);
-//             selections.push_back(selectedPI);
-//             cout << "Prime Implicant selected by Petrick: " << selectedPI.toExpression() << endl;
-//         }
-//     }
-// }
-
-// // Count literals in a term (for cost calculation)
-// int Table::countLiterals(const Term& term) {
-//     int count = 0;
-//     for (char c : term.binary) {
-//         if (c != '-') count++;
-//     }
-//     return count;
-// }
-
-// // Expand Petrick's expression to SOP form
-vector<vector<int>> Table::expandToPetricksSOP(const vector<vector<int>>& pos) {
-    if (pos.empty()) return {{}};
-    
-    // Initialize with first clause
-    vector<vector<int>> result;
-    for (int term : pos[0]) {
-        result.push_back({term});
-    }
-    
-    // Process remaining clauses
-    for (size_t i = 1; i < pos.size(); i++) {
-        vector<vector<int>> newResult;
-        for (const auto& existingProduct : result) {
-            for (int term : pos[i]) {
-                vector<int> newProduct = existingProduct;
-                // Add term if not already present
-                if (find(newProduct.begin(), newProduct.end(), term) == newProduct.end()) {
-                    newProduct.push_back(term);
-                }
-                newResult.push_back(newProduct);
-            }
-        }
-        result = newResult;
-    }
-    
-    // Sort each product for consistent comparison
-    for (auto& product : result) {
-        sort(product.begin(), product.end());
-    }
-    
-    // Remove duplicates
-    sort(result.begin(), result.end());
-    result.erase(unique(result.begin(), result.end()), result.end());
-    
-    // Apply absorption law properly
-    vector<vector<int>> minimalResult;
-    for (size_t i = 0; i < result.size(); i++) {
-        bool isRedundant = false;
-        for (size_t j = 0; j < result.size(); j++) {
-            if (i != j && includes(result[i].begin(), result[i].end(), 
-                                  result[j].begin(), result[j].end())) {
-                isRedundant = true;
-                break;
-            }
-        }
-        if (!isRedundant) {
-            minimalResult.push_back(result[i]);
-        }
-    }
-    
-    return minimalResult;
-}
-
-
-void Table::PetrickMethod() {
-    // Find uncovered minterms after EPIs
-    map<int, vector<Term>> uncoveredChart;
-    for (const auto& [minterm, pi_list] : CoverageChart) {
-        // Skip don't cares and already covered minterms
-        if (find(dont_cares.begin(), dont_cares.end(), minterm) != dont_cares.end() || 
-            C_m.find(minterm) != C_m.end()) {
-            continue;
-        }
-        
-        uncoveredChart[minterm] = pi_list;
-    }
-    
-    // Form Product of Sums expression
-    vector<vector<int>> petricksExpression;
-    map<string, int> piToIndex;
-    vector<Term> uniquePIs;
-    
-    // Map PIs to indices
-    for (const auto& [minterm, pi_list] : uncoveredChart) {
-        vector<int> sum;
-        for (const auto& pi : pi_list) {
-            if (piToIndex.find(pi.binary) == piToIndex.end()) {
-                piToIndex[pi.binary] = uniquePIs.size();
-                uniquePIs.push_back(pi);
-            }
-            sum.push_back(piToIndex[pi.binary]);
-        }
-        petricksExpression.push_back(sum);
-    }
-    
-    // Expand to Sum of Products
-    vector<vector<int>> sop = expandToPetricksSOP(petricksExpression);
-    
-    // Find minimum-cost solution
-    vector<int> bestSolution;
-    int minTerms = INT_MAX;
-    
-    for (const auto& product : sop) {
-        if (product.size() < minTerms) {
-            minTerms = product.size();
-            bestSolution = product;
-        }
-    }
-    
-    // Add selected PIs to solution
-    for (int piIdx : bestSolution) {
-        Term selectedPI = uniquePIs[piIdx];
-        EPI.push_back(selectedPI);
-    }
-}
-
-
-
-// void Table:: FinalExpression(){
-//     stringstream final;
-    
-//     set <string> possible_F;
-//     for(auto &epi: EPI){
-    
-//         cout<<epi.toExpression();
-
-//       final<<epi.toExpression();
-      
-//        final<< " + "; 
-//    }
-
-//     for(auto &[m, pi] : CoverageChart){
-//        { 
-//         for(auto &pi : primeImplicants)
-//     {
-//         for (auto &min: pi.coveredMinterms)
-//         {
+//           selections.push_back(selectedPI);
+//             cout << "  " << selectedPI.toExpression() << endl;
             
-//         if (min==m)
-//        { 
-//         stringstream temp;
-//         temp.str(final.str());
-//         temp << pi.toExpression();
-        
-//         temp<< " + "; 
-//         possible_F.insert(temp.str()); // vector of all possible minimized funtion expression
-//          }
-           
-//          }
-//     }
-//          }
-
-
-//     }
-//  cout << "Minimized Expressions:" <<"----------------" <<endl;
-
-//     for (auto &expr: possible_F)
-//     cout<< expr << endl << endl;
-    
-// }
-
-// void Table::FinalExpression() {
-//     set<string> unique_expressions;
-    
-//     // Construct base expression from Essential Prime Implicants
-//     string final;
-//     for (size_t i = 0; i < EPI.size(); i++) {
-//         if (i > 0) final += " + "; // Append "+" only if it's NOT the first term
-//         final += EPI[i].toExpression();
-//     }
-
-//     // Generate possible minimized function expressions
-//     for (auto &[m, pi_list] : CoverageChart) {
-//         for (auto &pi : pi_list) {  // Only iterate over relevant prime implicants
-//             string temp = final;
-//             if (!pi.toExpression().empty()) { // Ensure expression is not empty
-//                 if (!temp.empty()) temp += " + "; // Append "+" only if necessary
-//                 temp += pi.toExpression();
+//             // Mark all minterms covered by this PI
+//             for (auto& covered : selectedPI.coveredMinterms) {
+//                 C_m.insert(covered);
 //             }
-//             unique_expressions.insert(temp); // Store unique expressions
 //         }
 //     }
+// }
 
-//     // Print unique minimized expressions
-//     cout << "Minimized Expressions:\n";
-//     for (const auto &expr : unique_expressions) {
-//         cout << expr << endl;
+// // Helper function to multiply out the Product of Sums expression
+// vector<vector<int>> Table::MultiplyOutPOS(const vector<vector<int>>& POS) {
+//     if (POS.empty()) {
+//         return {};
+//     }
+    
+//     vector<vector<int>> result = {{}};  // Start with empty product
+    
+//     for (const auto& sumTerm : POS) {
+//         vector<vector<int>> newResult;
+        
+//         for (const auto& product : result) {
+//             for (int literal : sumTerm) {
+//                 vector<int> newProduct = product;
+                
+//                 // Only add the literal if it's not already in the product
+//                 if (find(newProduct.begin(), newProduct.end(), literal) == newProduct.end()) {
+//                     newProduct.push_back(literal);
+//                     newResult.push_back(newProduct);
+//                 } else {
+//                     // If literal is already in the product, just keep the product as is
+//                     newResult.push_back(product);
+//                 }
+//             }
+//         }
+        
+//         // Remove duplicates from newResult
+//         sort(newResult.begin(), newResult.end());
+//         newResult.erase(unique(newResult.begin(), newResult.end()), newResult.end());
+        
+//         result = newResult;
+//     }
+    
+//     // Apply absorption law to simplify the expression
+//     ApplyAbsorptionLaw(result);
+    
+//     return result;
+// }
+
+// // Helper function to apply the absorption law to simplify the SOP
+// void Table::ApplyAbsorptionLaw(vector<vector<int>>& SOP) {
+//     bool changed = true;
+    
+//     while (changed) {
+//         changed = false;
+        
+//         for (int i = 0; i < SOP.size(); i++) {
+//             for (int j = 0; j < SOP.size(); j++) {
+//                 if (i == j) continue;
+                
+//                 // Check if SOP[i] is a subset of SOP[j]
+//                 bool isSubset = true;
+//                 for (int term : SOP[i]) {
+//                     if (find(SOP[j].begin(), SOP[j].end(), term) == SOP[j].end()) {
+//                         isSubset = false;
+//                         break;
+//                     }
+//                 }
+                
+//                 // If SOP[i] is a subset of SOP[j], remove SOP[j]
+//                 if (isSubset && SOP[i].size() < SOP[j].size()) {
+//                     SOP.erase(SOP.begin() + j);
+//                     changed = true;
+                    
+//                     // Adjust indices after removal
+//                     if (i > j) i--;
+//                     j--;
+//                     break;
+//                 }
+//             }
+//         }
 //     }
 // }

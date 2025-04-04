@@ -23,6 +23,7 @@ public:
         return binary == other.binary;}
     bool operator<(const Term& other) const {
         return binary < other.binary;}
+   // int countLiterals() const;  // helper in petrick method to count literal
 
 };
 

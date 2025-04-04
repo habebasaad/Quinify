@@ -46,5 +46,12 @@ string Term::toExpression() const {
     
     return expr;
 }
+// int Term::countLiterals() const {
+//     int count = 0;
+//     for (char c : binary) {
+//         if (c != '-') count++;
+//     }
+//     return count;
+// }
 
     
