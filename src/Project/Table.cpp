@@ -605,9 +605,13 @@ void Table::PetrickMethod() {
     // Step 1: Find uncovered minterms after EPIs
     map<int, vector<Term>> uncoveredChart;
     
-    for (const auto& [minterm, pi_list] : reducedChart) {
+    for (const auto& [minterm, pi_list] : reducedChart) { //copy reduced chart
             uncoveredChart[minterm] = pi_list;
-    }
+            cout<< minterm << "---->" ;
+    for (auto &p: pi_list)
+    cout<<p.toExpression()<<endl;
+        }
+   
     
     if (uncoveredChart.empty()) {
         cout << "All minterms are covered by Essential Prime Implicants." << endl;
@@ -617,15 +621,28 @@ void Table::PetrickMethod() {
     cout << "Applying Petrick's method for remaining minterms..." << endl;
     // Step 2: Assign indices to unique prime implicants
     map<string, int> piToIndex;
+
     vector<Term> uniquePIs;
     
     for (const auto& [minterm, pi_list] : uncoveredChart) {
+        
         for (const auto& pi : pi_list) {
-            if (piToIndex.find(pi.binary) == piToIndex.end()) {
+            if (piToIndex.find(pi.binary) == piToIndex.end()) { 
+
                 piToIndex[pi.binary] = uniquePIs.size();
                 uniquePIs.push_back(pi);
+                for (const auto& [s, i] :piToIndex ) {
+                }
+
+                
             }
         }
+    }
+
+
+    for (auto & x:uniquePIs){
+
+    cout<<"hereeee"<<x.toExpression()<<endl; 
     }
     
     // Step 3: Form Product of Sums expression
@@ -639,37 +656,83 @@ void Table::PetrickMethod() {
         petricksExpression.push_back(sum);
     }
     
+  
     // Step 4: Expand to Sum of Products
     vector<vector<int>> sop = expandToPetricksSOP(petricksExpression);
-    
+    for (auto &x: sop){
+        for(auto &y:x)
+        cout<<"debug min: "<< y<<endl;
+    }
+
     // Step 5: Find minimum-cost solution
-    vector<int> bestSolution;
-    int minTerms = INT_MAX;
+   // Step 5: Find all minimal cost solutions
+vector<vector<int>> minimalSolutions;
+int minTerms = INT_MAX;
     
-    for (const auto& product : sop) {
-        if (product.size() < minTerms) {
-            minTerms = product.size();
-            bestSolution = product;
-        } else if (product.size() == minTerms) {
-            // If tied for number of terms, choose the one with fewer literals
-            int cost1 = 0, cost2 = 0;
-            for (int i : bestSolution) {
-                cost1 += countLiterals(uniquePIs[i]);
-            }
-            for (int i : product) {
-                cost2 += countLiterals(uniquePIs[i]);
-            }
-            if (cost2 < cost1) {
-                bestSolution = product;
-            }
-        }
+// First pass: find the minimum number of terms
+for (const auto& product : sop) {
+    if (product.size() < minTerms) {
+        minTerms = product.size();
+    }
+}
+    
+// Second pass: collect all solutions with the minimum number of terms
+vector<vector<int>> minTermCandidates;
+for (const auto& product : sop) {
+    if (product.size() == minTerms) {
+        minTermCandidates.push_back(product);
+    }
+}
+
+// Third pass: find the minimum literal count among these candidates
+int minLiterals = INT_MAX;
+for (const auto& product : minTermCandidates) {
+    int literalCount = 0;
+    for (int i : product) {
+        literalCount += countLiterals(uniquePIs[i]);
+    }
+    if (literalCount < minLiterals) {
+        minLiterals = literalCount;
+    }
+}
+
+// Fourth pass: collect all solutions with minimum terms and minimum literals
+for (const auto& product : minTermCandidates) {
+    int literalCount = 0;
+    for (int i : product) {
+        literalCount += countLiterals(uniquePIs[i]);
+    }
+    if (literalCount == minLiterals) {
+        minimalSolutions.push_back(product);
+    }
+}
+
+    // Process all minimal solutions
+cout << "Found " << minimalSolutions.size() << " minimal solutions:" << endl;
+
+// Clear previous selections
+selections.clear();
+
+// Track unique PIs across all minimal solutions
+set<string> uniqueSelectedPIs;
+
+// Process each minimal solution
+for (size_t solIdx = 0; solIdx < minimalSolutions.size(); solIdx++) {
+    cout << "Solution " << (solIdx + 1) << ":" << endl;
+    
+    // For debugging
+    for (auto &x : minimalSolutions[solIdx]) {
+        cout << "debug best: " << x << endl;
     }
     
-    // Step 6: Add selected PIs to solution
-    for (int piIdx : bestSolution) {
+    // Store the PIs for this solution
+    vector<Term> solutionPIs;
+    
+    // Process each PI in this solution
+    for (int piIdx : minimalSolutions[solIdx]) {
         Term selectedPI = uniquePIs[piIdx];
         
-        // Check if already included
+        // Check if already included in EPIs
         bool alreadyIncluded = false;
         for (const auto& epi : EPI) {
             if (epi.binary == selectedPI.binary) {
@@ -679,11 +742,22 @@ void Table::PetrickMethod() {
         }
         
         if (!alreadyIncluded) {
-          //  EPI.push_back(selectedPI);
-            selections.push_back(selectedPI);
-            cout << "Prime Implicant selected by Petrick: " << selectedPI.toExpression() << endl;
+            solutionPIs.push_back(selectedPI);
+            uniqueSelectedPIs.insert(selectedPI.binary);
+            cout << "Prime Implicant in solution " << (solIdx + 1) 
+                 << ": " << selectedPI.toExpression() << endl;
         }
     }
+    
+    // Add this solution's PIs to selections
+    for (const auto& pi : solutionPIs) {
+        selections.push_back(pi);
+    }
+}
+
+cout << "Total unique PIs selected across all minimal solutions: " 
+     << uniqueSelectedPIs.size() << endl;
+
 }
 
 
@@ -813,20 +887,24 @@ vector<vector<int>> Table::expandToPetricksSOP(const vector<vector<int>>& pos) {
     
     // Apply absorption law properly
     vector<vector<int>> minimalResult;
-    for (size_t i = 0; i < result.size(); i++) {
-        bool isRedundant = false;
-        for (size_t j = 0; j < result.size(); j++) {
-            if (i != j && includes(result[i].begin(), result[i].end(), 
-                                  result[j].begin(), result[j].end())) {
-                isRedundant = true;
-                break;
-            }
-        }
-        if (!isRedundant) {
-            minimalResult.push_back(result[i]);
+for (size_t i = 0; i < result.size(); i++) {
+    bool isRedundant = false;
+    for (size_t j = 0; j < result.size(); j++) {
+        if (i != j && includes(result[i].begin(), result[i].end(), 
+                              result[j].begin(), result[j].end())) {
+            // If result[j] is a subset of result[i], then result[i] is redundant
+            isRedundant = true;
+            break;
         }
     }
-    
+    if (!isRedundant) {
+        minimalResult.push_back(result[i]);
+    }
+}
+// for (auto &x: minimalResult){
+//     for(auto &y:x)
+//     cout<<"debug min: "<< y<<endl;
+// }
     return minimalResult;
 }
 
