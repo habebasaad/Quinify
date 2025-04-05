@@ -27,7 +27,7 @@ void compareResults(const Table& table){
     bool foundFile = false;
     string correctFile;
     // Track around each file output
-    for (int i = 3; i <= 10; i++){
+    for (int i = 1; i <= 10; i++){
         string name = "output" + to_string(i) + ".txt";
         correctFile = name;
         ifstream file(name);
