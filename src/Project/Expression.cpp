@@ -165,6 +165,12 @@ void Expression::validateTermCount() {
 }
 
 void Expression::printTerms() {
+    cout<< "----------------------------------------------------------------------------------------------"<<endl;
+    cout<<"\t\t\t\tWelcome to Quinify\n";
+    cout<<"Here, you will be able to generate the logic minimization using Quine McCluskey with up to 20 variables\n";
+    cout<<"Enjoy the journey with Quinify\n";
+    cout<<"Now, the project is starting processing the variable you entered!!!\n\n\n";
+
     cout << "Number of variables: " << numVariables << endl;
     
     if (termType == "maxterms") {

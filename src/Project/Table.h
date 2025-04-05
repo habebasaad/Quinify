@@ -19,6 +19,8 @@ public:
     vector <Term> remainingPI;
     map <int, vector<Term> > CoverageChart;
     map <int, vector<Term> > reducedChart; //for uncovered minterms
+    map <int, vector<string> > AllExpressions; //for all expressions
+
     vector<Term> selections;
     set<int> C_m; //coveredminterms
     map<string, set<int>> piToMinterms;
@@ -39,6 +41,9 @@ public:
     void PetrickMethod();
     vector<vector<int>> expandToPetricksSOP(const vector<vector<int>>& pos);
     int countLiterals(const Term& term);
+
+
+
 };
 
 #endif

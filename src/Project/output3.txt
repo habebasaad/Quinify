@@ -1,0 +1,1 @@
+A'B'C'D'E'F'G'H'I'J' + A'B'C'DE'F'G'HI'J' + A'B'C'D'EFG'H'IJ' + A'B'CD'E'F'GHI'J' + A'B'C'D'EF'GHI'J + AB'CD'EF'GH'I'J' + ABCDEF'G'HIJ + A'B'C'E'F'GHIJ' + A'B'C'D'E'GHIJ'
