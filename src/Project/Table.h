@@ -20,6 +20,10 @@ public:
     map <int, vector<Term> > CoverageChart;
     map <int, vector<Term> > reducedChart; //for uncovered minterms
     map <int, vector<string> > AllExpressions; //for all expressions
+vector<vector<int>> minimalResult;
+    vector<vector<int>> minimalSolutions;
+
+    vector<Term> uniquePIs;
 
     vector<Term> selections;
     set<int> C_m; //coveredminterms
