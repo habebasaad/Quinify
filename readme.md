@@ -7,8 +7,8 @@ A **solver** for logic functions using the **Quine-McCluskey alogrithm**, design
 <img src="explain.gif" alt="App Demo">
 
 </div>
-## Project Overview
-The project presents an implementation of the Quine-McCluskey logic minimization algorithm in C/C++ language. 
+
+
 
 ## key features of the C/C++ program
 - Reads an input of text file stating the boolean function in terms of minterms/maxterms and don't care terms.
