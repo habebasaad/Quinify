@@ -1,5 +1,6 @@
 #include "Table.h"
 #include "Term.h"
+#include "verilog.h"
 #include <iostream>
 #include <set>
 #include <algorithm>
@@ -636,16 +637,43 @@ void Table::FinalExpression() {
     // Print unique minimized expressions    -->has repititions  
     cout << "\t\t\t\tMinimized Expressions" << endl;
     if(selections.empty()){
-    cout<<base_expr <<endl;
-    AllExpressions[0]= exp;
+        cout << base_expr << endl;
+        AllExpressions[0] = exp;
+        
+        // Generate Verilog for the base expression
+        std::string verilogCode = generateVerilogModule(base_expr, "minimized_logic");
+        std::string filename = "minimized_logic.v";
+        std::ofstream outFile(filename);
+        if (outFile.is_open()) {
+            outFile << verilogCode;
+            outFile.close();
+            std::cout << "Generated Verilog module written to " << filename << std::endl;
+        } else {
+            std::cerr << "Failed to open " << filename << " for writing" << std::endl;
+        }
     }
     else{
         int num = 0;
-    for(auto & pi: selections){
-        cout<<base_expr << " + " << pi.toExpression() <<endl;
-        AllExpressions[num]= exp;
-        AllExpressions[num].push_back(pi.toExpression());
-        num++;
+        for(auto & pi: selections){
+            std::string fullExpression = base_expr + " + " + pi.toExpression();
+            cout << fullExpression << endl;
+            AllExpressions[num] = exp;
+            AllExpressions[num].push_back(pi.toExpression());
+            
+            // Generate Verilog for each minimized expression
+            std::string moduleName = "minimized_logic_" + std::to_string(num);
+            std::string verilogCode = generateVerilogModule(fullExpression, moduleName);
+            std::string filename = moduleName + ".v";
+            std::ofstream outFile(filename);
+            if (outFile.is_open()) {
+                outFile << verilogCode;
+                outFile.close();
+                std::cout << "Generated Verilog module written to " << filename << std::endl;
+            } else {
+                std::cerr << "Failed to open " << filename << " for writing" << std::endl;
+            }
+            
+            num++;
+        }
     }
-}
 }
