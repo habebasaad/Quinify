@@ -162,6 +162,11 @@ void Expression::validateTermCount() {
         cerr << "Error: Invalid number of terms." << endl;
         exit(1);
     }
+    else if (totalTerms == (pow(2, numVariables))) {
+        cerr << "The function has all of the input as either minterms or don't cares, so it will always result in 1. Just connect wires instead" << endl;
+        exit(1);
+    }
+
 }
 
 void Expression::printTerms() {
