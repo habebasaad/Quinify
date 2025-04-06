@@ -430,7 +430,6 @@ void Table::PetrickMethod() {
     cout<< "\n----------------------------------------------------------------------------------------------\n";
     cout << "\t\t\t\tApplying Petrick's method for remaining minterms" << endl;
     map<string, int> piToIndex;
-    vector<Term> uniquePIs;
         // Assigning indices to unique prime implicants
     for (const auto& [minterm, pi_list] : reducedChart) {
         for (const auto& pi : pi_list) {
@@ -458,60 +457,38 @@ void Table::PetrickMethod() {
     //Expanding to Sum of Products
     vector<vector<int>> sop = expandToPetricksSOP(petricksExpression);
 
-   // Finding all minimal cost solutions
-vector<vector<int>> minimalSolutions;
+// Step 5: Find all minimal term solutions (without considering literal count)
 int minTerms = INT_MAX;
     
-// First: finding the minimum number of terms
+// First: find the minimum number of terms
 for (const auto& product : sop) {
     if (product.size() < minTerms) {
         minTerms = product.size();
     }
 }
     
-// Second: collecting all solutions with the minimum number of terms
-vector<vector<int>> minTermCandidates;
+// Second: collect all solutions with the minimum number of terms
+// (These are all considered equally minimal since we don't care about complement cost)
 for (const auto& product : sop) {
     if (product.size() == minTerms) {
-        minTermCandidates.push_back(product);
-    }
-}
-
-// Third: finding the minimum literal count among these candidates
-int minLiterals = INT_MAX;
-for (const auto& product : minTermCandidates) {
-    int literalCount = 0;
-    for (int i : product) {
-        literalCount += countLiterals(uniquePIs[i]);
-    }
-    if (literalCount < minLiterals) {
-        minLiterals = literalCount;
-    }
-}
-
-// Finally: collecting all solutions with minimum terms and minimum literals
-for (const auto& product : minTermCandidates) {
-    int literalCount = 0;
-    for (int i : product) {
-        literalCount += countLiterals(uniquePIs[i]);
-    }
-    if (literalCount == minLiterals) {
         minimalSolutions.push_back(product);
     }
 }
 
-    // Process all minimal solutions
-cout << "Found " << minimalSolutions.size() << " minimal solutions in Petrick method." << endl;
+// Process all minimal solutions
+cout << "Found " << minimalSolutions.size() << " minimal solutions:" << endl;
 
 // Clear previous selections
 selections.clear();
 
-// Track unique PIs across all minimal solutions
-set<string> uniqueSelectedPIs;
+// Process each minimal solution separately
+vector<vector<Term>> allSolutions;
 
 // Process each minimal solution
 for (size_t solIdx = 0; solIdx < minimalSolutions.size(); solIdx++) {
-    // Store the PIs for the solution
+    cout << "Solution " << (solIdx + 1) << ":" << endl;
+    
+    // Store the PIs for this solution
     vector<Term> solutionPIs;
     
     // Process each PI in this solution
@@ -529,21 +506,54 @@ for (size_t solIdx = 0; solIdx < minimalSolutions.size(); solIdx++) {
         
         if (!alreadyIncluded) {
             solutionPIs.push_back(selectedPI);
-            uniqueSelectedPIs.insert(selectedPI.binary);
             cout << "Prime Implicant in solution " << (solIdx + 1) 
                  << ": " << selectedPI.toExpression() << endl;
         }
     }
     
-    // Add the solutions PIs to selections for minimization
-    for (const auto& pi : solutionPIs) {
-        selections.push_back(pi);
-    }
+    // Store this solution
+    allSolutions.push_back(solutionPIs);
 }
 
-cout << "Total unique PIs selected across all minimal solutions: " 
-     << uniqueSelectedPIs.size() << endl;
+// Now generate expressions for each solution
+for (size_t i = 0; i < allSolutions.size(); i++) {
+    // Clear previous selections
+    selections = allSolutions[i];
+    
+    // Generate and print this expression
+    cout << "Minimized Expression " << (i + 1) << ": ";
+    
+    string expr = "";
+    // First add all EPIs
+    for (size_t j = 0; j < EPI.size(); j++) {
+        if (j > 0 || !expr.empty()) expr += " + ";
+        expr += EPI[j].toExpression();
+    }
+    
+    // Then add the selected PIs for this solution
+    for (const auto& pi : selections) {
+        if (!expr.empty()) expr += " + ";
+        expr += pi.toExpression();
+    }
+    
+    cout << expr << endl;
+    
+    // Add to AllExpressions map for later use
+    vector<string> terms;
+    stringstream ss(expr);
+    string term;
+    while (getline(ss, term, '+')) {
+        // Trim whitespace
+        term.erase(0, term.find_first_not_of(" \t"));
+        term.erase(term.find_last_not_of(" \t") + 1);
+        if (!term.empty()) {
+            terms.push_back(term);
+        }
+    }
+    AllExpressions[i] = terms;
+}
 
+cout << "Total minimal solutions found: " << allSolutions.size() << endl;
 }
 
 // Count literals in a term (for cost calculation)
@@ -592,7 +602,6 @@ vector<vector<int>> Table::expandToPetricksSOP(const vector<vector<int>>& pos) {
     result.erase(unique(result.begin(), result.end()), result.end());
     
     // Apply absorption law properly
-    vector<vector<int>> minimalResult;
 for (size_t i = 0; i < result.size(); i++) {
     bool isRedundant = false;
     for (size_t j = 0; j < result.size(); j++) {
@@ -613,31 +622,21 @@ for (size_t i = 0; i < result.size(); i++) {
 
 
 void Table::FinalExpression() {
-    set<string> unique_expressions;
-    set<string> unique;
     // Construct base expression from Essential Prime Implicants
     string base_expr;
-    vector <string> exp;
+    vector<string> exp;
     for (size_t i = 0; i < EPI.size(); i++) {
         if (i > 0) base_expr += " + ";
         base_expr += EPI[i].toExpression();
         exp.push_back(EPI[i].toExpression());
     }
-    // Generate possible minimized function expressions
-    for (auto &[m, pi_list] : reducedChart) {
-        for (auto &pi : pi_list) {
-            string temp = base_expr;
-            if (!pi.toExpression().empty()) {
-                if (!temp.empty()) temp += " + ";
-                temp += pi.toExpression();
-            }
-            unique_expressions.insert(temp);
-        }
-    }
-    // Print unique minimized expressions    -->has repititions  
-    cout << "\t\t\t\tMinimized Expressions" << endl;
-    if(selections.empty()){
-        cout << base_expr << endl;
+
+    // Process all minimal solutions from Petrick's method
+    cout << "\t\t\tPossible Function Minimizations" << endl;
+    
+    if (minimalSolutions.empty()) {
+        // If no solutions from Petrick's method, just print the EPIs
+        cout << "F = " << base_expr << endl;
         AllExpressions[0] = exp;
         
         // Generate Verilog for the base expression
@@ -651,18 +650,57 @@ void Table::FinalExpression() {
         } else {
             std::cerr << "Failed to open " << filename << " for writing" << std::endl;
         }
-    }
-    else{
-        int num = 0;
-        for(auto & pi: selections){
-            std::string fullExpression = base_expr + " + " + pi.toExpression();
-            cout << fullExpression << endl;
-            AllExpressions[num] = exp;
-            AllExpressions[num].push_back(pi.toExpression());
+    } else {
+        // Store all possible expressions
+        vector<vector<Term>> allSolutions;
+        
+        // Process each minimal solution
+        for (size_t solIdx = 0; solIdx < minimalSolutions.size(); solIdx++) {
+            // Store the PIs for this solution
+            vector<Term> solutionPIs;
+            
+            // Process each PI in this solution
+            for (int piIdx : minimalSolutions[solIdx]) {
+                Term selectedPI = uniquePIs[piIdx];
+                
+                // Check if already included in EPIs
+                bool alreadyIncluded = false;
+                for (const auto& epi : EPI) {
+                    if (epi.binary == selectedPI.binary) {
+                        alreadyIncluded = true;
+                        break;
+                    }
+                }
+                
+                if (!alreadyIncluded) {
+                    solutionPIs.push_back(selectedPI);
+                }
+            }
+            
+            // Add this solution to all selections
+            allSolutions.push_back(solutionPIs);
+        }
+        
+        // Print each possible function minimization
+        for (size_t i = 0; i < allSolutions.size(); i++) {
+            string expr = base_expr;
+            vector<string> terms = exp;  // Start with EPIs
+            
+            // Add the selected PIs for this solution
+            for (const auto& pi : allSolutions[i]) {
+                if (!expr.empty()) expr += " + ";
+                expr += pi.toExpression();
+                terms.push_back(pi.toExpression());
+            }
+            
+            cout << "F = " << expr << endl;
+            
+            // Store in AllExpressions map
+            AllExpressions[i] = terms;
             
             // Generate Verilog for each minimized expression
-            std::string moduleName = "minimized_logic_" + std::to_string(num);
-            std::string verilogCode = generateVerilogModule(fullExpression, moduleName);
+            std::string moduleName = "minimized_logic_" + std::to_string(i);
+            std::string verilogCode = generateVerilogModule(expr, moduleName);
             std::string filename = moduleName + ".v";
             std::ofstream outFile(filename);
             if (outFile.is_open()) {
@@ -672,8 +710,6 @@ void Table::FinalExpression() {
             } else {
                 std::cerr << "Failed to open " << filename << " for writing" << std::endl;
             }
-            
-            num++;
         }
     }
 }
