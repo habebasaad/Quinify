@@ -78,7 +78,7 @@ void compareResults(const Table& table){
 
 
 int main() {
-    Expression expr("input.txt");
+    Expression expr("../../tests/test2.txt");
     expr.printTerms();
     
     Table table(expr.minterms, expr.dontCares);
